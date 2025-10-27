@@ -1,0 +1,17 @@
+[
+    {
+        "label": "PING",
+        "payload": "PING",
+        "append": "crlf"
+    },
+    {
+        "label": "HELLO",
+        "payload": "HELLO",
+        "append": "lf"
+    },
+    {
+        "label": "RESET",
+        "payload": "AT+RST",
+        "append": "crlf"
+    }
+]

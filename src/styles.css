@@ -1,0 +1,603 @@
+:root {
+    font-family: ui-sans-serif, system-ui, -apple-system;
+    --primary: #4a90e2;
+    --rx-bg: #e3f9f3;
+    --tx-bg: #fff5e6;
+    --sys-bg: #f3f3f3;
+}
+
+body,
+#root {
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid #ddd;
+    background: linear-gradient(to bottom, #fafafa, #f5f5f5);
+    flex-wrap: wrap;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+header nav button {
+    margin-right: .25rem;
+    padding: .4rem .8rem;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+header nav button.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+header .spacer {
+    flex: 1;
+}
+
+header button {
+    padding: .4rem .75rem;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+
+header button:hover {
+    background: #f0f0f0;
+}
+
+header button.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+header input,
+header select {
+    padding: .4rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+header label {
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+}
+
+header label.muted {
+    color: #666;
+}
+
+main {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    height: calc(100% - 60px);
+    overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+    main {
+        grid-template-columns: 320px 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    main {
+        grid-template-columns: 1fr;
+    }
+
+    aside {
+        border-right: none;
+        border-bottom: 1px solid #ddd;
+        max-height: 50vh;
+    }
+}
+
+aside {
+    padding: .75rem;
+    border-right: 1px solid #ddd;
+    overflow: auto;
+    background: #fafafa;
+}
+
+section.logs {
+    overflow: auto;
+    padding: .5rem;
+    background: white;
+    position: relative;
+}
+
+.empty-logs {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #9ca3af;
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.empty-text {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: .5rem;
+}
+
+.empty-hint {
+    font-size: 0.875rem;
+}
+
+pre.log {
+    margin: 0;
+    padding: .35rem .6rem;
+    border-bottom: 1px solid #eee;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    transition: background 0.1s;
+    cursor: default;
+}
+
+pre.log:hover {
+    filter: brightness(0.97);
+}
+
+pre.log.rx {
+    background: var(--rx-bg);
+}
+
+pre.log.tx {
+    background: var(--tx-bg);
+}
+
+pre.log.sys {
+    background: var(--sys-bg);
+}
+
+pre.log .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    font-size: 10px;
+    margin-right: 6px;
+}
+
+pre.log .badge.rx {
+    background: #10b981;
+    color: white;
+}
+
+pre.log .badge.tx {
+    background: #f59e0b;
+    color: white;
+}
+
+pre.log .badge.sys {
+    background: #6b7280;
+    color: white;
+}
+
+pre.log mark {
+    background: #ffeb3b;
+    padding: 0 2px;
+    font-weight: 600;
+}
+
+.nlcrlf,
+.nlcr,
+.nllf {
+    background: #e0e0e0;
+    padding: 0 3px;
+    border-radius: 2px;
+    font-size: 10px;
+    color: #666;
+}
+
+.panel {
+    background: white;
+    border-radius: 6px;
+    padding: 1rem;
+    margin: .75rem 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: .75rem;
+}
+
+.panel h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.status-badge.connected {
+    background: #10b981;
+    color: white;
+}
+
+.status-badge.disconnected {
+    background: #6b7280;
+    color: white;
+}
+
+.error-message {
+    background: #fee;
+    border: 1px solid #fcc;
+    color: #c00;
+    padding: .5rem;
+    border-radius: 4px;
+    margin-bottom: .5rem;
+    font-size: 12px;
+}
+
+.panel .row {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    margin: .5rem 0;
+}
+
+.panel .grid {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: .5rem .75rem;
+    margin: .5rem 0;
+}
+
+.panel .grid label {
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+}
+
+.panel input,
+.panel select,
+.panel button {
+    padding: .5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.panel input[type="number"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* datalist가 있는 number input의 스피너 위치 조정 */
+.panel input[list] {
+    padding-right: 10px;
+}
+
+.panel input[list]::-webkit-outer-spin-button,
+.panel input[list]::-webkit-inner-spin-button {
+    margin-right: 0;
+    right: 0;
+}
+
+
+.panel button {
+    background: white;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.panel button:hover {
+    background: #f0f0f0;
+}
+
+.grow {
+    flex: 1;
+}
+
+.stats-widget {
+    background: white;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: .75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.stats-widget h3 {
+    margin: 0 0 .75rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .5rem;
+    font-size: 13px;
+}
+
+.stats-grid div {
+    padding: .5rem;
+    background: #f9fafb;
+    border-radius: 4px;
+}
+
+.stats-grid strong {
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.color-rules-panel,
+.macros-panel {
+    background: white;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: .75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.color-rules-panel h3,
+.macros-panel h3 {
+    margin: 0 0 .75rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.color-rules-panel button,
+.macros-panel button {
+    padding: .4rem .75rem;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    margin-bottom: .5rem;
+}
+
+.color-rule {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    margin: .5rem 0;
+    padding: .5rem;
+    background: #f9fafb;
+    border-radius: 4px;
+}
+
+.color-rule input[type="text"] {
+    flex: 1;
+    padding: .4rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.color-rule input[type="color"] {
+    width: 40px;
+    height: 32px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.color-rule label {
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+}
+
+.color-rule button {
+    padding: .25rem .5rem;
+    margin: 0;
+    background: #fee;
+    border-color: #fcc;
+}
+
+.macro-group {
+    margin: .75rem 0;
+    padding: .75rem;
+    background: #f9fafb;
+    border-radius: 4px;
+    border: 1px solid #e5e7eb;
+}
+
+.macro-group>input {
+    width: 100%;
+    padding: .5rem;
+    margin-bottom: .5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.macro-preset {
+    display: flex;
+    gap: .5rem;
+    margin: .5rem 0;
+}
+
+.macro-preset input {
+    padding: .4rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.macro-preset button {
+    padding: .25rem .5rem;
+    margin: 0;
+    background: #fee;
+    border-color: #fcc;
+}
+
+.macro-bar {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: .75rem 0 .5rem 0;
+}
+
+.macro-bar label {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.macro-bar select {
+    flex: 1;
+    padding: .4rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.macro-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin: .5rem 0;
+}
+
+.macro-buttons button {
+    padding: .5rem .75rem;
+    border: 1px solid #ccc;
+    background: #4a90e2;
+    color: white;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.macro-buttons button:hover {
+    background: #357abd;
+}
+
+.conn-tabs {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    margin-right: .5rem;
+}
+
+.conn-tab {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+}
+
+.conn-tab button {
+    padding: .4rem .6rem;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    font-size: 12px;
+}
+
+.conn-tab.active button {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.conn-tab .close-btn {
+    padding: .2rem .4rem;
+    margin-left: -4px;
+    border: none;
+    background: transparent;
+    color: #666;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.conn-tab.active .close-btn {
+    color: white;
+}
+
+.conn-tabs>button {
+    padding: .3rem .5rem;
+    border: 1px solid #ccc;
+    background: #f0f0f0;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 11px;
+    transition: background 0.2s;
+}
+
+.conn-tabs>button:hover {
+    background: #e0e0e0;
+}
+
+/* 스크롤바 스타일 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
+/* 선택 스타일 */
+::selection {
+    background: #b3d4fc;
+    color: #000;
+}
+
+/* 툴팁 스타일 */
+[title] {
+    cursor: help;
+}
