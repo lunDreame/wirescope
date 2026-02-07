@@ -77,3 +77,6 @@
 - **Save**: 텍스트 로그 저장
 - **CSV**: CSV 형식 저장
 - **HEX**: HEX 덤프 저장
+
+## LISENCE
+Copyright (c) 2026 lunDreame. All rights reserved.
