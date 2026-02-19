@@ -2,163 +2,247 @@ use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
 use serialport::{self, DataBits, FlowControl, Parity, SerialPortType, StopBits};
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tauri::AppHandle;
-use tauri::Emitter;
-use tauri::Manager;
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use std::fs::{OpenOptions, File};
+
+use crate::payload::apply_append_mode;
+use crate::telemetry::TelemetryLogger;
 
 pub fn list_ports() -> Result<Vec<String>> {
-  let ports = serialport::available_ports()?;
-  Ok(ports
-    .into_iter()
-    .map(|p| match p.port_type {
-      SerialPortType::UsbPort(info) => format!(
-        "{} (USB: {} {} {}:{})",
-        p.port_name,
-        info.manufacturer.unwrap_or_default(),
-        info.product.unwrap_or_default(),
-        info.vid,
-        info.pid
-      ),
-      _ => p.port_name,
-    })
-    .collect())
+    let ports = serialport::available_ports()?;
+
+    Ok(ports
+        .into_iter()
+        .map(|port| match port.port_type {
+            SerialPortType::UsbPort(info) => format!(
+                "{} (USB: {} {} {}:{})",
+                port.port_name,
+                info.manufacturer.unwrap_or_default(),
+                info.product.unwrap_or_default(),
+                info.vid,
+                info.pid
+            ),
+            _ => port.port_name,
+        })
+        .collect())
 }
 
 #[derive(serde::Deserialize)]
 pub struct SerialOpenArgs {
-  pub port: String,
-  pub baud: u32,
-  pub data_bits: u8,
-  pub parity: String,
-  pub stop_bits: u8,
-  pub flow: String,
-  #[serde(default = "default_conn_id")]
-  pub conn_id: String,
+    pub port: String,
+    pub baud: u32,
+    pub data_bits: u8,
+    pub parity: String,
+    pub stop_bits: u8,
+    pub flow: String,
+    #[serde(default = "default_conn_id")]
+    pub conn_id: String,
 }
 
-fn default_conn_id() -> String { "main".to_string() }
-
-fn to_data_bits(n: u8) -> Result<DataBits> { match n {5=>Ok(DataBits::Five),6=>Ok(DataBits::Six),7=>Ok(DataBits::Seven),8=>Ok(DataBits::Eight), _=>Err(anyhow!("invalid databits"))} }
-fn to_parity(s: &str) -> Result<Parity> { match s {"none"=>Ok(Parity::None),"even"=>Ok(Parity::Even),"odd"=>Ok(Parity::Odd), _=>Err(anyhow!("invalid parity"))} }
-fn to_stop_bits(n: u8) -> Result<StopBits> { match n {1=>Ok(StopBits::One),2=>Ok(StopBits::Two), _=>Err(anyhow!("invalid stopbits"))} }
-fn to_flow(s: &str) -> Result<FlowControl> { match s {"none"=>Ok(FlowControl::None),"software"=>Ok(FlowControl::Software),"hardware"=>Ok(FlowControl::Hardware), _=>Err(anyhow!("invalid flow"))} }
-
-fn create_rolling_log_file(app: &AppHandle, origin: &str, conn_id: &str) -> Result<File> {
-  let log_dir = app.path().app_log_dir()
-    .map_err(|e| anyhow::anyhow!("Failed to get log directory: {}", e))?;
-  std::fs::create_dir_all(&log_dir)?;
-  
-  let timestamp = OffsetDateTime::now_utc();
-  let filename = format!("{}_{}_{:04}{:02}{:02}_{:02}{:02}{:02}.log",
-    origin, conn_id,
-    timestamp.year(), timestamp.month() as u8, timestamp.day(),
-    timestamp.hour(), timestamp.minute(), timestamp.second()
-  );
-  
-  let path = log_dir.join(filename);
-  let file = OpenOptions::new()
-    .create(true)
-    .append(true)
-    .open(path)?;
-  
-  Ok(file)
+fn default_conn_id() -> String {
+    String::from("main")
 }
 
-struct SerialHandle { tx: crossbeam_channel::Sender<Vec<u8>>, _join: thread::JoinHandle<()> }
+struct SerialHandle {
+    tx_sender: crossbeam_channel::Sender<Vec<u8>>,
+    stop_sender: crossbeam_channel::Sender<()>,
+    join_handle: thread::JoinHandle<()>,
+}
 
-static SERIAL_STATE: Lazy<Arc<Mutex<HashMap<String, SerialHandle>>>> = Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+static SERIAL_STATE: Lazy<Arc<Mutex<HashMap<String, SerialHandle>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+const SERIAL_IO_TIMEOUT_MS: u64 = 100;
+const TX_QUEUE_CAPACITY: usize = 1024;
+const MAX_TX_BATCH_PER_TICK: usize = 64;
 
 pub async fn open_and_spawn(app: AppHandle, args: SerialOpenArgs) -> Result<()> {
-  let conn_id = args.conn_id.clone();
-  
-  // 기존 연결 종료
-  {
-    let mut state = SERIAL_STATE.lock().unwrap();
-    state.remove(&conn_id);
-  }
+    cleanup_finished_handles();
 
-  let builder = serialport::new(args.port.clone(), args.baud)
-    .data_bits(to_data_bits(args.data_bits)?)
-    .parity(to_parity(&args.parity)?)
-    .stop_bits(to_stop_bits(args.stop_bits)?)
-    .flow_control(to_flow(&args.flow)?)
-    .timeout(Duration::from_millis(100));
+    let conn_id = args.conn_id.clone();
 
-  let mut port = builder.open()?;
-  let (tx_s, tx_r) = crossbeam_channel::unbounded::<Vec<u8>>();
-
-  let conn_id_clone = conn_id.clone();
-  let log_file = create_rolling_log_file(&app, "serial", &conn_id)?;
-
-  let join = thread::spawn(move || {
-    let mut buf = [0u8; 4096];
-    let mut last = Instant::now();
-    let mut log_file = log_file;
-
-    let emit = |dir: &str, data: Vec<u8>, last: &mut Instant, log_file: &mut File| {
-      let when = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
-      let when_str = when.format(&Rfc3339).unwrap();
-      let interval = last.elapsed().as_millis();
-      
-      let _ = app.emit("log", serde_json::json!({
-        "when_iso": &when_str,
-        "interval_ms": interval,
-        "dir": dir,
-        "origin": "serial",
-        "text": String::from_utf8_lossy(&data).to_string(),
-        "raw": data,
-        "connId": &conn_id_clone,
-      }));
-
-      // 로그 파일에 기록
-      let _ = writeln!(log_file, "[{}] ({}) {} | {}", 
-        when_str, dir, interval, String::from_utf8_lossy(&data));
-      
-      *last = Instant::now();
-    };
-
-    loop {
-      if let Ok(p) = tx_r.try_recv() {
-        let _ = port.write_all(&p);
-        emit("TX", p, &mut last, &mut log_file);
-      }
-      match port.read(&mut buf) {
-        Ok(n) if n > 0 => emit("RX", buf[..n].to_vec(), &mut last, &mut log_file),
-        _ => thread::sleep(Duration::from_millis(5)),
-      }
+    if let Some(existing) = take_handle(&conn_id) {
+        shutdown_handle(existing);
     }
-  });
 
-  SERIAL_STATE.lock().unwrap().insert(conn_id, SerialHandle { tx: tx_s, _join: join });
-  Ok(())
+    let builder = serialport::new(args.port.clone(), args.baud)
+        .data_bits(to_data_bits(args.data_bits)?)
+        .parity(to_parity(&args.parity)?)
+        .stop_bits(to_stop_bits(args.stop_bits)?)
+        .flow_control(to_flow(&args.flow)?)
+        .timeout(Duration::from_millis(SERIAL_IO_TIMEOUT_MS));
+
+    let mut port = builder.open()?;
+
+    let (tx_sender, tx_receiver) = crossbeam_channel::bounded::<Vec<u8>>(TX_QUEUE_CAPACITY);
+    let (stop_sender, stop_receiver) = crossbeam_channel::bounded::<()>(1);
+    let conn_id_for_thread = conn_id.clone();
+
+    let join_handle = thread::spawn(move || {
+        let mut logger = match TelemetryLogger::new(app, "serial", &conn_id_for_thread) {
+            Ok(instance) => instance,
+            Err(error) => {
+                eprintln!("failed to initialize serial logger: {error}");
+                return;
+            }
+        };
+
+        let mut buffer = [0u8; 4096];
+
+        loop {
+            if stop_receiver.try_recv().is_ok() {
+                break;
+            }
+
+            for _ in 0..MAX_TX_BATCH_PER_TICK {
+                match tx_receiver.try_recv() {
+                    Ok(payload) => match port.write_all(&payload) {
+                        Ok(_) => logger.emit("TX", &payload),
+                        Err(error) => {
+                            logger.emit_text("SYS", &format!("[ERROR] serial write: {error}"));
+                            return;
+                        }
+                    },
+                    Err(crossbeam_channel::TryRecvError::Empty) => break,
+                    Err(crossbeam_channel::TryRecvError::Disconnected) => return,
+                }
+            }
+
+            match port.read(&mut buffer) {
+                Ok(read) if read > 0 => logger.emit("RX", &buffer[..read]),
+                Err(error) if error.kind() == ErrorKind::TimedOut => {}
+                Err(error) => {
+                    logger.emit_text("SYS", &format!("[ERROR] serial read: {error}"));
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        logger.emit_text("SYS", "[INFO] serial worker stopped");
+    });
+
+    SERIAL_STATE.lock().unwrap().insert(
+        conn_id,
+        SerialHandle {
+            tx_sender,
+            stop_sender,
+            join_handle,
+        },
+    );
+
+    Ok(())
 }
 
 pub fn close(conn_id: Option<String>) -> Result<()> {
-  let mut g = SERIAL_STATE.lock().unwrap();
-  if let Some(id) = conn_id {
-    g.remove(&id);
-  } else {
-    g.clear();
-  }
-  Ok(())
+    cleanup_finished_handles();
+
+    let handles: Vec<SerialHandle> = {
+        let mut state = SERIAL_STATE.lock().unwrap();
+
+        if let Some(id) = conn_id {
+            state.remove(&id).into_iter().collect()
+        } else {
+            state.drain().map(|(_, handle)| handle).collect()
+        }
+    };
+
+    handles.into_iter().for_each(shutdown_handle);
+
+    Ok(())
 }
 
 pub fn tx(payload: String, append: String, conn_id: String) -> Result<()> {
-  let bytes = match append.as_str() {
-    "lf" => [payload.as_bytes(), b"\n"].concat(),
-    "cr" => [payload.as_bytes(), b"\r"].concat(),
-    "crlf" => [payload.as_bytes(), b"\r\n"].concat(),
-    _ => payload.into_bytes(),
-  };
-  let state = SERIAL_STATE.lock().unwrap();
-  if let Some(h) = state.get(&conn_id) { 
-    h.tx.send(bytes)?; 
-  }
-  Ok(())
+    let bytes = apply_append_mode(payload, &append);
+
+    let sender = {
+        let state = SERIAL_STATE.lock().unwrap();
+        let handle = state
+            .get(&conn_id)
+            .ok_or_else(|| anyhow!("serial connection not found: {conn_id}"))?;
+
+        handle.tx_sender.clone()
+    };
+
+    sender
+        .try_send(bytes)
+        .map_err(|error| anyhow!("serial tx queue is full or closed: {error}"))?;
+    Ok(())
+}
+
+pub fn is_connected(conn_id: &str) -> bool {
+    cleanup_finished_handles();
+    let state = SERIAL_STATE.lock().unwrap();
+    state.contains_key(conn_id)
+}
+
+fn shutdown_handle(handle: SerialHandle) {
+    let _ = handle.stop_sender.send(());
+    let _ = handle.join_handle.join();
+}
+
+fn take_handle(conn_id: &str) -> Option<SerialHandle> {
+    SERIAL_STATE.lock().unwrap().remove(conn_id)
+}
+
+fn cleanup_finished_handles() {
+    let handles: Vec<SerialHandle> = {
+        let mut state = SERIAL_STATE.lock().unwrap();
+        let finished_ids: Vec<String> = state
+            .iter()
+            .filter_map(|(conn_id, handle)| {
+                if handle.join_handle.is_finished() {
+                    Some(conn_id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        finished_ids
+            .into_iter()
+            .filter_map(|conn_id| state.remove(&conn_id))
+            .collect()
+    };
+
+    handles.into_iter().for_each(shutdown_handle);
+}
+
+fn to_data_bits(bits: u8) -> Result<DataBits> {
+    match bits {
+        5 => Ok(DataBits::Five),
+        6 => Ok(DataBits::Six),
+        7 => Ok(DataBits::Seven),
+        8 => Ok(DataBits::Eight),
+        _ => Err(anyhow!("invalid data bits: {bits}")),
+    }
+}
+
+fn to_parity(parity: &str) -> Result<Parity> {
+    match parity {
+        "none" => Ok(Parity::None),
+        "even" => Ok(Parity::Even),
+        "odd" => Ok(Parity::Odd),
+        _ => Err(anyhow!("invalid parity: {parity}")),
+    }
+}
+
+fn to_stop_bits(stop_bits: u8) -> Result<StopBits> {
+    match stop_bits {
+        1 => Ok(StopBits::One),
+        2 => Ok(StopBits::Two),
+        _ => Err(anyhow!("invalid stop bits: {stop_bits}")),
+    }
+}
+
+fn to_flow(flow: &str) -> Result<FlowControl> {
+    match flow {
+        "none" => Ok(FlowControl::None),
+        "software" => Ok(FlowControl::Software),
+        "hardware" => Ok(FlowControl::Hardware),
+        _ => Err(anyhow!("invalid flow control: {flow}")),
+    }
 }

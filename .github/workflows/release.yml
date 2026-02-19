@@ -1,58 +1,84 @@
+# Refs: https://tauri.app/distribute/pipelines/github
+# Refs: https://github.com/tauri-apps/tauri-action
+
 name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+    branches:
+      - release
+  workflow_dispatch: # Manual execution
 
+# When pushed to the release branch or manually executed
+# builds for Windows, macOS (Intel/Apple Silicon), and Linux are created
 jobs:
-  release:
+  publish-tauri:
     permissions:
-      contents: write
+      contents: write  # Release 생성/업로드에 필요
     strategy:
-      fail-fast: false
+      fail-fast: false # 한 플랫폼 실패해도 다른 플랫폼 빌드 계속
       matrix:
         include:
-          - platform: 'macos-latest'
-            args: '--target universal-apple-darwin'
-          - platform: 'ubuntu-22.04'
-            args: ''
-          - platform: 'windows-latest'
-            args: ''
+          # macOS Apple Silicon (M1/M2/M3)
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+          # macOS Intel
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+          # Linux x64
+          - platform: ubuntu-22.04
+            args: ""
+          # Windows x64
+          - platform: windows-latest
+            args: ""
 
     runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Setup Node
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "lts/*"
+          cache: "npm"
 
-      - name: Install Rust stable
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Install dependencies (ubuntu only)
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+
+      - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
+          sudo apt-get install -y \
+            libasound2-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Build the app
+      - name: Build and release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'WireScope v__VERSION__'
+          tagName: app-v__VERSION__
+          releaseName: "WireScope v__VERSION__"
           releaseBody: |
-            WireScope v__VERSION__ 릴리스
-          releaseDraft: true
+            ## WireScope v__VERSION__
+            See the assets below to download this version and install.
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
