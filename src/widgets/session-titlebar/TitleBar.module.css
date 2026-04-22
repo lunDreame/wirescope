@@ -1,0 +1,147 @@
+.titlebar {
+  display: flex;
+  align-items: center;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  height: var(--titlebar-h);
+  user-select: none;
+  overflow: hidden;
+  padding-left: 12px;
+  gap: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.sep {
+  width: 1px;
+  height: 14px;
+  background: var(--line-2);
+  margin: 0 12px;
+  flex-shrink: 0;
+}
+
+.crumbs {
+  font-size: 12px;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.sessions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 14px;
+  overflow: hidden;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: var(--r-1);
+  font-size: 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.tab:hover { background: var(--hover); }
+
+.tab.active {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.tab.off { opacity: 0.6; }
+
+.tabLabel { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotOn  { background: var(--ok); }
+.dotOff { background: var(--ink-dim); }
+
+.tabClose {
+  opacity: 0;
+  padding: 1px 3px;
+  border-radius: 2px;
+  color: var(--ink-3);
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  line-height: 1;
+  transition: opacity 0.1s, background 0.1s;
+}
+
+.tab:hover .tabClose { opacity: 1; }
+.tabClose:hover { background: var(--hover); color: var(--ink); }
+
+.newTab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 2px 0 4px;
+  color: var(--ink-3);
+  border-radius: 3px;
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.newTab:hover { background: var(--hover); color: var(--ink); }
+
+.spacer { flex: 1; min-width: 0; }
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-right: 6px;
+}
+
+.navBtn {
+  padding: 4px 10px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-1);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s;
+}
+
+.navBtn:hover { background: var(--hover); color: var(--ink); }
+
+.navBtn.navBtnActive {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+

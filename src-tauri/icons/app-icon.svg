@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#1a1b2e"/>
+  <!-- Sine wave, uniformly scaled 22x from original 18x18 path, centered at 256,256 -->
+  <path
+    d="M 80 256 C 124 256, 124 146, 168 146 S 212 366, 256 366 S 300 146, 344 146 S 388 256, 432 256"
+    stroke="white"
+    stroke-width="36"
+    stroke-linecap="round"
+    fill="none"
+  />
+</svg>

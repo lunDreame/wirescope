@@ -1,0 +1,40 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.tx      { background: var(--tx-bg);  color: var(--tx); }
+.rx      { background: var(--rx-bg);  color: var(--rx); }
+.ok      { background: oklch(0.94 0.05 150); color: var(--ok); }
+.err     { background: var(--err-bg); color: var(--err); }
+.warn    { background: oklch(0.95 0.06 75);  color: var(--warn); }
+.neutral { background: var(--panel);  color: var(--ink-2); border: 1px solid var(--line); }
+.brand   { background: oklch(0.94 0.05 245); color: var(--brand); }
+
+/* Status dot */
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.dot-connected    { background: var(--ok); box-shadow: 0 0 0 2px var(--tx-bg); }
+.dot-disconnected { background: var(--ink-dim); }
+.dot-error        { background: var(--err); }
+.dot-tx           { background: var(--tx); }
+.dot-rx           { background: var(--rx); }
+.dot-ok           { background: var(--ok); }
+.dot-err          { background: var(--err); }
+.dot-warn         { background: var(--warn); }
+.dot-neutral      { background: var(--ink-dim); }
+.dot-brand        { background: var(--brand); }

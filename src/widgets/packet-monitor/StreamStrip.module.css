@@ -1,0 +1,58 @@
+.strip {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.stat {
+  font-family: var(--mono);
+  color: var(--ink-2);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 500;
+}
+
+.stat b { color: var(--ink); font-weight: 600; }
+
+.rule {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+}
+
+.syncHex {
+  color: oklch(0.42 0.12 245);
+  font-weight: 600;
+}
+
+.canvasWrap {
+  height: 60px;
+  overflow: hidden;
+  padding: 0 12px 8px;
+  background:
+    linear-gradient(to right, transparent 0, var(--surface) 100%) right center / 60px 100% no-repeat,
+    linear-gradient(to left, transparent 0, var(--surface) 100%) left center / 30px 100% no-repeat;
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

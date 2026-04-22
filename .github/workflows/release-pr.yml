@@ -1,0 +1,52 @@
+name: Release PR
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  create-release-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure release branch exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! git ls-remote --exit-code origin release; then
+            git checkout -b release
+            git push origin release
+            git checkout main
+          fi
+
+      - name: Ensure release label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create release --color 0075ca --description "Release PR" 2>/dev/null || true
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING=$(gh pr list --base release --head main --state open --json number --jq length)
+          if [ "$EXISTING" -eq 0 ]; then
+            VERSION=$(node -p "require('./package.json').version")
+            gh pr create \
+              --base release \
+              --head main \
+              --title "Release v$VERSION" \
+              --body "Merge changes from main into release." \
+              --label release
+          else
+            echo "Release PR already open — skipping."
+          fi

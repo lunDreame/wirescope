@@ -1,0 +1,175 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600&display=swap');
+
+/* ══════════════════════════════════════════
+   DESIGN TOKENS
+   ══════════════════════════════════════════ */
+:root {
+  /* Surfaces */
+  --bg:       oklch(0.985 0.004 95);
+  --surface:  oklch(0.995 0.002 95);
+  --panel:    oklch(0.975 0.005 95);
+  --panel-2:  oklch(0.96  0.006 95);
+  --rail:     oklch(0.945 0.007 95);
+  --hover:    oklch(0.93  0.008 95);
+  --selected: oklch(0.91  0.012 240 / 0.25);
+
+  /* Borders */
+  --line:   oklch(0.90 0.006 95);
+  --line-2: oklch(0.82 0.008 95);
+  --rule:   oklch(0.93 0.006 95);
+
+  /* Ink */
+  --ink:     oklch(0.22 0.012 260);
+  --ink-2:   oklch(0.42 0.012 260);
+  --ink-3:   oklch(0.58 0.010 260);
+  --ink-dim: oklch(0.70 0.008 260);
+
+  /* Brand + semantic */
+  --brand:   oklch(0.52 0.15 245);
+  --brand-2: oklch(0.62 0.15 245);
+  --tx:      oklch(0.56 0.14 150);
+  --tx-bg:   oklch(0.93 0.05 150);
+  --rx:      oklch(0.58 0.14 75);
+  --rx-bg:   oklch(0.94 0.07 75);
+  --err:     oklch(0.55 0.18 25);
+  --err-bg:  oklch(0.94 0.06 25);
+  --warn:    oklch(0.66 0.13 75);
+  --ok:      oklch(0.58 0.12 150);
+
+  /* Radius */
+  --r-1: 3px;
+  --r-2: 5px;
+  --r-3: 8px;
+
+  /* Fonts */
+  --ui:    'IBM Plex Sans', -apple-system, sans-serif;
+  --mono:  'IBM Plex Mono', ui-monospace, monospace;
+  --serif: 'IBM Plex Serif', serif;
+
+  /* Spacing scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+
+  /* Layout */
+  --rail-w:      240px;
+  --inspector-w: 360px;
+  --titlebar-h:  36px;
+  --toolbar-h:   44px;
+  --statusbar-h: 22px;
+  --dock-h:      260px;
+}
+
+/* ══ Density ══ */
+body[data-density='cozy']  { --row-h: 34px; --row-py: 8px; }
+body[data-density='mid']   { --row-h: 26px; --row-py: 5px; }
+body[data-density='tight'] { --row-h: 20px; --row-py: 2px; }
+
+/* ══ Dark Theme ══ */
+body.theme-dark {
+  --bg:       oklch(0.18 0.008 260);
+  --surface:  oklch(0.22 0.008 260);
+  --panel:    oklch(0.20 0.008 260);
+  --panel-2:  oklch(0.24 0.01  260);
+  --rail:     oklch(0.17 0.008 260);
+  --hover:    oklch(0.27 0.012 260);
+  --selected: oklch(0.32 0.08 245 / 0.35);
+  --line:     oklch(0.30 0.01  260);
+  --line-2:   oklch(0.38 0.012 260);
+  --rule:     oklch(0.25 0.01  260);
+  --ink:      oklch(0.95 0.005 260);
+  --ink-2:    oklch(0.80 0.01  260);
+  --ink-3:    oklch(0.62 0.01  260);
+  --ink-dim:  oklch(0.48 0.01  260);
+  --brand:    oklch(0.72 0.14 245);
+  --brand-2:  oklch(0.62 0.14 245);
+  --tx:       oklch(0.72 0.15 150);
+  --tx-bg:    oklch(0.30 0.08 150);
+  --rx:       oklch(0.74 0.13 75);
+  --rx-bg:    oklch(0.30 0.08 75);
+  --err:      oklch(0.70 0.17 25);
+  --err-bg:   oklch(0.30 0.08 25);
+  --ok:       oklch(0.70 0.14 150);
+  --warn:     oklch(0.74 0.14 75);
+}
+
+/* ══════════════════════════════════════════
+   RESET + BASE
+   ══════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+#root { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--ui);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+button { font-family: inherit; font-size: inherit; color: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; color: inherit; }
+::selection { background: oklch(0.85 0.08 245); }
+
+/* ══ Scrollbars ══ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: oklch(0.85 0.006 95);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.75 0.008 95);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* ══════════════════════════════════════════
+   APP SHELL
+   ══════════════════════════════════════════ */
+.app-shell {
+  display: grid;
+  grid-template-rows: var(--titlebar-h) 1fr;
+  height: 100vh;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.app-body {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--inspector-w);
+  min-height: 0;
+}
+
+.app-body--full {
+  grid-template-columns: 1fr;
+}
+
+.app-body--no-inspector {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+}
+
+/* ══════════════════════════════════════════
+   SHARED TYPOGRAPHY UTILITIES
+   ══════════════════════════════════════════ */
+.text-mono { font-family: var(--mono); }
+.text-serif { font-family: var(--serif); }
+.text-ink-2 { color: var(--ink-2); }
+.text-ink-3 { color: var(--ink-3); }
+.text-brand { color: var(--brand); }
+.text-ok  { color: var(--ok); }
+.text-err { color: var(--err); }
+.text-warn { color: var(--warn); }
+.text-tx { color: var(--tx); }
+.text-rx { color: var(--rx); }
+.nowrap { white-space: nowrap; }
+.tabnum { font-variant-numeric: tabular-nums; }

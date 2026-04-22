@@ -1,0 +1,245 @@
+.rail {
+  background: var(--rail);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.section {
+  padding: 10px 10px 6px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  font-weight: 600;
+  padding: 0 4px 6px;
+  white-space: nowrap;
+}
+
+.addBtn {
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 2px;
+  color: var(--ink-3);
+  background: transparent;
+  border: none;
+}
+
+.addBtn:hover { background: var(--hover); color: var(--ink); }
+
+.empty {
+  padding: 10px 6px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-3);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.emptyBtn {
+  padding: 5px 12px;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-2);
+  font-size: 11.5px;
+  color: var(--brand);
+  background: transparent;
+  cursor: pointer;
+}
+
+.emptyBtn:hover { background: var(--hover); }
+
+/* Connection item */
+.conn {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--r-2);
+  cursor: pointer;
+  margin-bottom: 2px;
+  transition: background 0.1s;
+}
+
+.conn:hover { background: var(--hover); }
+
+.conn.connActive {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.conn.connOff { opacity: 0.65; }
+
+.bar {
+  width: 3px;
+  height: 24px;
+  border-radius: 2px;
+  background: var(--ok);
+  justify-self: center;
+  flex-shrink: 0;
+}
+
+.bar.barOff { background: var(--ink-dim); }
+
+.connInfo { overflow: hidden; }
+
+.connName {
+  font-weight: 500;
+  font-size: 12.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connSub {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connRate {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-2);
+  text-align: right;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.connRate b { color: var(--ink); font-weight: 600; }
+
+/* Sub-nav */
+.subnav { padding: 2px 0; }
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r-2);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s;
+}
+
+.navItem:hover { background: var(--hover); }
+
+.navItem.navItemOn {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-weight: 500;
+}
+
+.count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.count.countErr { color: var(--err); }
+
+.filterDot {
+  font-size: 12px;
+  color: var(--ink-dim);
+  flex-shrink: 0;
+}
+
+/* Filter management */
+.filterRemove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-dim);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s;
+}
+
+.navItem:hover .filterRemove { opacity: 1; }
+.filterRemove:hover { color: var(--err); }
+
+.addFilterForm {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  margin: 2px 2px;
+}
+
+.filterInp {
+  height: 24px;
+  padding: 0 6px;
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--ink);
+  outline: none;
+}
+
+.filterInp:focus { border-color: var(--brand); }
+
+.filterFormBtns {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.filterSaveBtn {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  background: var(--brand);
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.filterCancelBtn {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  background: var(--panel);
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+/* Buffer row */
+.bufferRow {
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}

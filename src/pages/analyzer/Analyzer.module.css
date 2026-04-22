@@ -1,0 +1,264 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.body {
+  display: grid;
+  grid-template-columns: 280px 1fr 240px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.statsPanel,
+.graphPanel,
+.topPanel {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 20px 20px;
+}
+
+.statsPanel { border-right: 1px solid var(--line-2); }
+.graphPanel { border-right: 1px solid var(--line-2); }
+.topPanel   { background: var(--surface); }
+
+.panelHeader {
+  margin-bottom: 16px;
+}
+
+.panelTitle {
+  margin: 0 0 3px;
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.panelSub {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.section {
+  margin-bottom: 18px;
+}
+
+.emptyStats {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 16px;
+  color: var(--ink-3);
+  font-size: 12px;
+  text-align: center;
+}
+
+.emptyGraph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+/* Stat cards */
+.statsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.statCard {
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+}
+
+.statLabel {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.statValue {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.statUnit {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+  margin-left: 3px;
+}
+
+.statSub {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* Direction bar */
+.dirBar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--line-2);
+  margin-top: 8px;
+}
+
+.dirBarTx {
+  background: var(--tx);
+  transition: width 0.3s;
+}
+
+.dirBarRx {
+  background: var(--rx);
+  transition: width 0.3s;
+}
+
+.dirLegend {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.dirTx {
+  font-size: 11px;
+  color: var(--tx);
+  font-weight: 600;
+}
+
+.dirRx {
+  font-size: 11px;
+  color: var(--rx);
+  font-weight: 600;
+}
+
+/* Charts */
+.chartWrap {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.chart {
+  width: 100%;
+  height: 140px;
+  display: block;
+}
+
+.chartFreq {
+  width: 100%;
+  height: 80px;
+  display: block;
+  background: var(--panel);
+  border-radius: var(--r-2);
+  border: 1px solid var(--line-2);
+}
+
+.chartFreqLabels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--ink-3);
+}
+
+.chartYMax,
+.chartYMin {
+  position: absolute;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--ink-3);
+  right: 0;
+}
+
+.chartYMax { top: 0; }
+.chartYMin { bottom: 0; }
+
+/* Top bytes */
+.topList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 16px;
+}
+
+.topItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topRank {
+  font-size: 10px;
+  color: var(--ink-3);
+  width: 22px;
+  font-family: var(--mono);
+  flex-shrink: 0;
+}
+
+.topByte {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  width: 44px;
+  flex-shrink: 0;
+}
+
+.topBar {
+  flex: 1;
+  height: 6px;
+  background: var(--panel);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.topBarFill {
+  height: 100%;
+  background: var(--brand);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.topCount {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  width: 40px;
+  text-align: right;
+}
+
+/* Warning */
+.warningBox {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  background: oklch(from var(--err) l c h / 0.07);
+  border: 1px solid oklch(from var(--err) l c h / 0.2);
+  border-radius: var(--r-2);
+  font-size: 11.5px;
+  color: var(--err);
+  margin-top: auto;
+}

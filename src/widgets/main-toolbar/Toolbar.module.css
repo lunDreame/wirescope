@@ -1,0 +1,127 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  height: var(--toolbar-h);
+  overflow: visible;
+  position: relative;
+}
+
+.tg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--r-2);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.tg:hover { background: var(--hover); border-color: var(--line-2); }
+
+.tg.primary {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+}
+
+.tg.primary:hover { opacity: 0.88; }
+
+.tg:disabled { opacity: 0.38; cursor: not-allowed; pointer-events: auto; }
+.tg:disabled:hover { background: transparent; border-color: var(--line); }
+
+.tg.on {
+  background: oklch(0.93 0.06 245);
+  color: oklch(0.35 0.12 245);
+  border-color: oklch(0.82 0.08 245);
+}
+
+.group {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.group button {
+  padding: 5px 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+  transition: background 0.1s, color 0.1s;
+}
+
+.group button.on {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.group button:not(.on):hover { background: var(--hover); color: var(--ink); }
+.group button:not(:last-child) { border-right: 1px solid var(--line); }
+
+.sep {
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+  margin: 0 4px;
+}
+
+.hint {
+  color: var(--ink-3);
+  font-weight: 400;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.58 0.12 150 / 0.5); }
+  50%       { box-shadow: 0 0 0 4px oklch(0.58 0.12 150 / 0); }
+}
+
+.kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: oklch(0.75 0.01 260);
+  padding: 1px 4px;
+  border: 1px solid oklch(0.45 0.01 260);
+  border-radius: 2px;
+  background: transparent;
+}
+
+.dotRx {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--rx);
+  display: inline-block;
+}
+
+.dotTx {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--tx);
+  display: inline-block;
+}
