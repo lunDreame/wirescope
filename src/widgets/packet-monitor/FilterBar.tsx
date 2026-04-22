@@ -1,23 +1,25 @@
 import { useState, KeyboardEvent } from 'react';
 import s from './FilterBar.module.css';
 import { useApp, usePackets } from '../../app/store';
-
-const FILTER_ROWS = [
-  { syntax: 'starts:68 01',   desc: '해당 바이트로 시작하는 패킷' },
-  { syntax: 'contains:68 01', desc: '해당 바이트를 포함하는 패킷' },
-  { syntax: 'checksum:fail',  desc: '체크섬 실패 패킷' },
-  { syntax: 'checksum:pass',  desc: '체크섬 통과 패킷' },
-  { syntax: 'len:12',         desc: '길이가 정확히 N바이트' },
-  { syntax: 'len>8 / len<4',  desc: 'N바이트 초과 / 미만' },
-  { syntax: '!contains:68',   desc: '부정 (! 접두사)' },
-  { syntax: '68 01 00 16',    desc: 'HEX 자유 검색' },
-];
+import { useT } from '../../shared/lib/i18n';
 
 export function FilterBar() {
   const { state, dispatch } = useApp();
   const { filter } = state;
   const visible = usePackets();
+  const t = useT();
   const [input, setInput] = useState('');
+
+  const FILTER_ROWS = [
+    { syntax: 'starts:68 01',   desc: t('filter.starts') },
+    { syntax: 'contains:68 01', desc: t('filter.contains') },
+    { syntax: 'checksum:fail',  desc: t('filter.csumFail') },
+    { syntax: 'checksum:pass',  desc: t('filter.csumPass') },
+    { syntax: 'len:12',         desc: t('filter.lenExact') },
+    { syntax: 'len>8 / len<4',  desc: t('filter.lenRange') },
+    { syntax: '!contains:68',   desc: t('filter.negate') },
+    { syntax: '68 01 00 16',    desc: t('filter.hexFree') },
+  ];
 
   const tokens = filter.tokens;
 
@@ -61,19 +63,19 @@ export function FilterBar() {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={onKey}
-          placeholder={tokens.length === 0 ? '+ 필터 추가…' : '+ 추가'}
+          placeholder={tokens.length === 0 ? t('filter.placeholder') : t('filter.addMore')}
         />
         <span className={s.hintBtn}>
           ?
           <div className={s.hintPop}>
-            <div className={s.hintTitle}>필터 문법</div>
+            <div className={s.hintTitle}>{t('filter.syntax')}</div>
             {FILTER_ROWS.map(r => (
               <div key={r.syntax} className={s.hintRow}>
                 <code className={s.hintCode}>{r.syntax}</code>
                 <span className={s.hintDesc}>{r.desc}</span>
               </div>
             ))}
-            <div className={s.hintFooter}>Enter로 적용 · Backspace로 마지막 토큰 삭제 · 여러 토큰은 AND 조건</div>
+            <div className={s.hintFooter}>{t('filter.footer')}</div>
           </div>
         </span>
       </div>
@@ -83,20 +85,20 @@ export function FilterBar() {
         className={`${s.chip} ${filter.showTx && filter.showRx ? s.chipOn : ''}`}
         onClick={() => dispatch({ type: 'SET_FILTER', filter: { showTx: true, showRx: true } })}
       >
-        방향: 모두
+        {t('filter.dirAll')}
       </span>
       <span
         className={`${s.chip} ${filter.errorsOnly ? s.chipOn : ''}`}
         onClick={() => dispatch({ type: 'SET_FILTER', filter: { errorsOnly: !filter.errorsOnly } })}
       >
-        오류만
+        {t('filter.errorsOnly')}
         {filter.errorsOnly && <button className={s.chipX} onClick={e => { e.stopPropagation(); dispatch({ type: 'SET_FILTER', filter: { errorsOnly: false } }); }}>×</button>}
       </span>
 
       <div style={{ flex: 1 }} />
 
       <span className={s.count}>
-        <b>{visible.length.toLocaleString()}</b>개 표시 / 전체 {state.packets.length.toLocaleString()}개
+        <b>{visible.length.toLocaleString()}</b>{t('filter.showing')}{state.packets.length.toLocaleString()}{t('filter.total')}
       </span>
     </div>
   );

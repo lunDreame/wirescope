@@ -1,10 +1,12 @@
 import { useRef, useEffect } from 'react';
 import s from './StreamStrip.module.css';
 import { useApp } from '../../app/store';
+import { useT } from '../../shared/lib/i18n';
 
 export function StreamStrip() {
   const { state } = useApp();
   const { packets, splitter } = state;
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const recent = packets.slice(-300);
@@ -58,14 +60,14 @@ export function StreamStrip() {
   return (
     <div className={s.strip}>
       <div className={s.head}>
-        <span>원시 바이트 스트림 · 최근 {recent.length}개 패킷</span>
-        {totalPps > 0 && <span className={s.stat}>· <b>{totalPps}</b> 패킷/초</span>}
-        {avgGap > 0 && <span className={s.stat}>· 평균 간격 <b>{avgGap.toFixed(0)} ms</b></span>}
+        <span>{t('stream.title')}{recent.length}{t('stream.pkts')}</span>
+        {totalPps > 0 && <span className={s.stat}>·<b>{totalPps}</b>{t('stream.pps')}</span>}
+        {avgGap > 0 && <span className={s.stat}>· {t('stream.avgGap')}<b>{avgGap.toFixed(0)} ms</b></span>}
         <span style={{ flex: 1 }} />
         {(sofHex || eofHex) && (
           <span className={s.rule}>
-            시작 <span className={s.syncHex}>{sofHex}</span>
-            {eofHex && <> → 끝 <span className={s.syncHex}>{eofHex}</span></>}
+            {t('stream.start')} <span className={s.syncHex}>{sofHex}</span>
+            {eofHex && <> → {t('stream.end')} <span className={s.syncHex}>{eofHex}</span></>}
             {splitter.checksum_algorithm && splitter.checksum_algorithm !== 'none' && ` · ${splitter.checksum_algorithm}`}
           </span>
         )}

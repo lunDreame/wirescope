@@ -1,5 +1,6 @@
 import { Component, ReactNode } from 'react';
 import { useApp } from './store';
+import { getT } from '../shared/lib/i18n';
 import { SessionTitleBar } from '../widgets/session-titlebar';
 import { WorkspacePage } from '../pages/workspace';
 import { ConnectPage } from '../pages/connect';
@@ -12,11 +13,13 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
   static getDerivedStateFromError(e: Error) { return { error: e.message }; }
   render() {
     if (this.state.error) {
+      const lang = (() => { try { const s = localStorage.getItem('ws_settings'); return JSON.parse(s ?? '{}').language ?? 'ko'; } catch { return 'ko'; } })();
+      const t = getT(lang);
       return (
         <div style={{ padding: 32, fontFamily: 'monospace' }}>
-          <strong>오류 발생</strong>
+          <strong>{t('error.occurred')}</strong>
           <pre style={{ marginTop: 12, whiteSpace: 'pre-wrap', color: 'oklch(0.55 0.18 25)' }}>{this.state.error}</pre>
-          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 16 }}>다시 시도</button>
+          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 16 }}>{t('error.retry')}</button>
         </div>
       );
     }

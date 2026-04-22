@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import s from './SettingsPanel.module.css';
 import { useApp } from '../../app/store';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
+import { useT } from '../../shared/lib/i18n';
 import type { AppSettings } from '../../shared/types';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 export function SettingsPanel({ onClose }: Props) {
   const { state, dispatch } = useApp();
   const { settings } = state;
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,33 +29,42 @@ export function SettingsPanel({ onClose }: Props) {
 
   return (
     <div className={s.panel} ref={ref}>
-      <h3 className={s.title}>빠른 설정</h3>
+      <h3 className={s.title}>{t('settings.title')}</h3>
       <div className={s.body}>
         <div className={s.row}>
-          <label>테마</label>
+          <label>{t('settings.language')}</label>
           <SegmentedControl
             size="sm"
-            options={[{ value: 'light', label: '라이트' }, { value: 'dark', label: '다크' }]}
+            options={[{ value: 'ko', label: '한국어' }, { value: 'en', label: 'English' }]}
+            value={settings.language ?? 'ko'}
+            onChange={v => update({ language: v as 'ko' | 'en' })}
+          />
+        </div>
+        <div className={s.row}>
+          <label>{t('settings.theme')}</label>
+          <SegmentedControl
+            size="sm"
+            options={[{ value: 'light', label: t('settings.light') }, { value: 'dark', label: t('settings.dark') }]}
             value={settings.theme}
             onChange={v => update({ theme: v })}
           />
         </div>
         <div className={s.row}>
-          <label>강조색</label>
+          <label>{t('settings.accentColor')}</label>
           <SegmentedControl
             size="sm"
             options={[
-              { value: '245', label: '블루' },
-              { value: '285', label: '보라' },
-              { value: '165', label: '청록' },
-              { value: '25',  label: '주황' },
+              { value: '245', label: t('settings.blue') },
+              { value: '285', label: t('settings.purple') },
+              { value: '165', label: t('settings.teal') },
+              { value: '25',  label: t('settings.orange') },
             ]}
             value={String(settings.accentHue)}
             onChange={v => update({ accentHue: Number(v) })}
           />
         </div>
         <div className={s.row}>
-          <label>바이트 표시</label>
+          <label>{t('settings.byteDisplay')}</label>
           <SegmentedControl
             size="sm"
             options={[
@@ -67,38 +78,38 @@ export function SettingsPanel({ onClose }: Props) {
           />
         </div>
         <div className={s.row}>
-          <label>밀도</label>
+          <label>{t('settings.density')}</label>
           <SegmentedControl
             size="sm"
             options={[
-              { value: 'cozy',  label: '넓게' },
-              { value: 'mid',   label: '보통' },
-              { value: 'tight', label: '촘촘' },
+              { value: 'cozy',  label: t('settings.cozy') },
+              { value: 'mid',   label: t('settings.mid') },
+              { value: 'tight', label: t('settings.tight') },
             ]}
             value={settings.density}
             onChange={v => update({ density: v as any })}
           />
         </div>
         <div className={s.row}>
-          <label>간격 행 표시</label>
+          <label>{t('settings.showGapRows')}</label>
           <label className={s.toggle}>
             <input
               type="checkbox"
               checked={settings.showGapRows}
               onChange={e => update({ showGapRows: e.target.checked })}
             />
-            <span>통신 간격 표시</span>
+            <span>{t('settings.showGapDesc')}</span>
           </label>
         </div>
         <div className={s.row}>
-          <label>자동 스크롤</label>
+          <label>{t('settings.autoScroll')}</label>
           <label className={s.toggle}>
             <input
               type="checkbox"
               checked={settings.autoScroll}
               onChange={e => update({ autoScroll: e.target.checked })}
             />
-            <span>새 패킷에 따라가기</span>
+            <span>{t('settings.autoScrollDesc')}</span>
           </label>
         </div>
       </div>

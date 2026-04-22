@@ -1,6 +1,7 @@
 import { useRef, useEffect, memo, useCallback } from 'react';
 import s from './PacketTable.module.css';
 import { useApp, usePackets } from '../../app/store';
+import { useT } from '../../shared/lib/i18n';
 import { formatTimestamp, formatDelta, formatBytes } from '../../shared/lib/format';
 import type { Packet } from '../../shared/types';
 
@@ -9,6 +10,7 @@ export function PacketTable() {
   const packets = usePackets();
   const scrollRef = useRef<HTMLDivElement>(null);
   const { settings, splitter } = state;
+  const t = useT();
 
   // Auto-scroll
   useEffect(() => {
@@ -28,19 +30,19 @@ export function PacketTable() {
       {/* Table header */}
       <div className={s.head}>
         <div className={s.colIdx}>#</div>
-        <div className={s.colTs}>시각 ↓</div>
-        <div className={s.colDir}>방향</div>
-        <div className={s.colGap}>간격</div>
+        <div className={s.colTs}>{t('table.time')}</div>
+        <div className={s.colDir}>{t('table.dir')}</div>
+        <div className={s.colGap}>{t('table.gap')}</div>
         <div className={s.colBytes}>
-          바이트 ({settings.byteFormat.toUpperCase()})
+          {t('table.bytes')} ({settings.byteFormat.toUpperCase()})
           {sofHex && (
             <span className={s.splitterHint}>
-              분리 기준: {sofHex}{eofHex ? ` … ${eofHex}` : ''}
+              {t('table.splitBy')}: {sofHex}{eofHex ? ` … ${eofHex}` : ''}
             </span>
           )}
         </div>
-        <div className={s.colLen}>길이</div>
-        <div className={s.colCk}>체크섬</div>
+        <div className={s.colLen}>{t('table.length')}</div>
+        <div className={s.colCk}>{t('table.checksum')}</div>
       </div>
 
       {/* Rows */}
@@ -55,8 +57,8 @@ export function PacketTable() {
             </div>
             <div className={s.emptyText}>
               {state.sessions.some(s => s.connected)
-                ? '패킷을 기다리는 중…'
-                : '먼저 장치에 연결하세요'}
+                ? t('table.waiting')
+                : t('table.connectFirst')}
             </div>
           </div>
         ) : packets.map((pkt, idx) => {

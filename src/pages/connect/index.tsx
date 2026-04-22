@@ -5,6 +5,7 @@ import { SectionHeading } from '../../shared/ui/SectionHeading';
 import { Button } from '../../shared/ui/Button';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
 import { useApp } from '../../app/store';
+import { useT } from '../../shared/lib/i18n';
 import * as api from '../../shared/api/tauri';
 import {
   BAUD_RATES, DATA_BITS, PARITY_OPTIONS, STOP_BITS,
@@ -19,6 +20,7 @@ function loadConn<T>(key: string, fallback: T): T {
 
 export function ConnectPage() {
   const { state, dispatch } = useApp();
+  const t = useT();
 
   // Serial state
   const [ports, setPorts]   = useState<string[]>([]);
@@ -54,7 +56,7 @@ export function ConnectPage() {
 
   function saveSerialPreset() {
     const label = `${port} · ${baud} ${dataBits}${parity[0].toUpperCase()}${stopBits}`;
-    setSavedSerial('저장됨 ✓');
+    setSavedSerial(t('connect.saved'));
     setTimeout(() => setSavedSerial(''), 2000);
     dispatch({
       type: 'ADD_SAVED_FILTER',
@@ -65,7 +67,7 @@ export function ConnectPage() {
   function saveTcpPreset() {
     if (!host) return;
     const label = `${host}:${tcpPort}`;
-    setSavedTcp('저장됨 ✓');
+    setSavedTcp(t('connect.saved'));
     setTimeout(() => setSavedTcp(''), 2000);
     dispatch({
       type: 'ADD_SAVED_FILTER',
@@ -126,7 +128,7 @@ export function ConnectPage() {
     setTcpLoading(true); setTcpError('');
     try {
       const port = parseInt(tcpPort, 10);
-      if (isNaN(port) || port < 1 || port > 65535) { setTcpError('포트 번호가 올바르지 않습니다'); setTcpLoading(false); return; }
+      if (isNaN(port) || port < 1 || port > 65535) { setTcpError(t('connect.portError')); setTcpLoading(false); return; }
       const id = await api.connectTcp(host, port);
       const sessions = await api.getSessions();
       dispatch({ type: 'SET_SESSIONS', sessions });
@@ -158,7 +160,7 @@ export function ConnectPage() {
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
             <path d="M3 7l3 3 5-6"/>
           </svg>
-          <strong>{connectedSessions.length}개 세션 활성:</strong>
+          <strong>{connectedSessions.length}{t('connect.sessionsActive')}:</strong>
           {connectedSessions.map(sess => (
             <span key={sess.id} className={s.sessionTag}>
               {sess.name}
@@ -177,8 +179,8 @@ export function ConnectPage() {
               <path d="M6 11h2M10 11h2M14 11h2"/>
             </svg>
             <div>
-              <h2 className={s.colTitle}>시리얼 통신</h2>
-              <p className={s.colSub}>COM 포트 / TTY 장치 연결</p>
+              <h2 className={s.colTitle}>{t('connect.serialTitle')}</h2>
+              <p className={s.colSub}>{t('connect.serialSub')}</p>
             </div>
           </div>
 
@@ -186,27 +188,23 @@ export function ConnectPage() {
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
               <circle cx="7" cy="7" r="5.5"/><path d="M7 4.5v3M7 9.5v.5"/>
             </svg>
-            <span>
-              아래에서 <b>포트와 보드레이트</b>를 선택하세요.
-              잘 모르겠다면 <b>프리셋</b>을 먼저 골라보세요.
-              장치 관리자 또는 <code>/dev/</code> 목록에서 포트 이름을 확인할 수 있습니다.
-            </span>
+            <span>{t('connect.serialHelp')}</span>
           </div>
 
           <div className={s.formSection}>
-            <SectionHeading>포트 선택</SectionHeading>
+            <SectionHeading>{t('connect.portSection')}</SectionHeading>
             <div className={s.formRow}>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>포트</label>
+                <label className={s.fieldLabel}>{t('connect.port')}</label>
                 <div className={s.portRow}>
                   <select className={s.sel} value={port} onChange={e => setPort(e.target.value)}>
                     {ports.length === 0
-                      ? <option value="">포트 없음</option>
+                      ? <option value="">{t('connect.noPort')}</option>
                       : ports.map(p => <option key={p} value={p}>{p}</option>)
                     }
                   </select>
                   <Button size="sm" onClick={() => api.listSerialPorts().then(p => { setPorts(p); if (p.length > 0) setPort(p[0]); })}>
-                    새로고침
+                    {t('connect.refresh')}
                   </Button>
                 </div>
               </div>
@@ -214,28 +212,31 @@ export function ConnectPage() {
 
             <div className={s.formRow}>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>프리셋</label>
+                <label className={s.fieldLabel}>{t('connect.preset')}</label>
                 <select className={s.sel} onChange={e => applyPreset(Number(e.target.value))}>
-                  <option value="">직접 설정</option>
-                  {SERIAL_PRESETS.map((p, i) => (
-                    <option key={i} value={i}>{p.label}</option>
-                  ))}
+                  <option value="">{t('connect.customPreset')}</option>
+                  {SERIAL_PRESETS.map((p, i) => {
+                    const label = p.label === '기본 (8N1)' ? t('preset.default')
+                      : p.label === 'Arduino 기본' ? t('preset.arduino')
+                      : p.label;
+                    return <option key={i} value={i}>{label}</option>;
+                  })}
                 </select>
               </div>
             </div>
           </div>
 
           <div className={s.formSection}>
-            <SectionHeading>통신 파라미터</SectionHeading>
+            <SectionHeading>{t('connect.params')}</SectionHeading>
             <div className={s.formGrid}>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>보드레이트</label>
+                <label className={s.fieldLabel}>{t('connect.baud')}</label>
                 <select className={s.sel} value={baud} onChange={e => setBaud(Number(e.target.value))}>
                   {BAUD_RATES.map(r => <option key={r} value={r}>{r.toLocaleString()}</option>)}
                 </select>
               </div>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>데이터 비트</label>
+                <label className={s.fieldLabel}>{t('connect.dataBits')}</label>
                 <SegmentedControl
                   options={DATA_BITS.map(b => ({ value: String(b), label: String(b) }))}
                   value={String(dataBits)}
@@ -244,28 +245,28 @@ export function ConnectPage() {
                 />
               </div>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>패리티</label>
+                <label className={s.fieldLabel}>{t('connect.parity')}</label>
                 <select className={s.sel} value={parity} onChange={e => setParity(e.target.value)}>
-                  {PARITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {PARITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{t(`parity.${o.value}`)}</option>)}
                 </select>
               </div>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>스톱 비트</label>
+                <label className={s.fieldLabel}>{t('connect.stopBits')}</label>
                 <SegmentedControl
-                  options={STOP_BITS.map(o => ({ value: o.value, label: o.label }))}
+                  options={STOP_BITS.map(o => ({ value: o.value, label: t(`stop.${o.value}`) }))}
                   value={stopBits}
                   onChange={setStopBits}
                   size="sm"
                 />
               </div>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>흐름 제어</label>
+                <label className={s.fieldLabel}>{t('connect.flowControl')}</label>
                 <select className={s.sel} value={flow} onChange={e => setFlow(e.target.value)}>
-                  {FLOW_CONTROL.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {FLOW_CONTROL.map(o => <option key={o.value} value={o.value}>{t(`flow.${o.value}`)}</option>)}
                 </select>
               </div>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>수신 버퍼</label>
+                <label className={s.fieldLabel}>{t('connect.rxBuffer')}</label>
                 <div className={s.inlineRow}>
                   <input className={s.inpSm} type="number" value={bufferKb} onChange={e => setBufferKb(Number(e.target.value))} />
                   <span className={s.unit}>KB</span>
@@ -275,21 +276,21 @@ export function ConnectPage() {
           </div>
 
           <div className={s.formSection}>
-            <SectionHeading>고급 옵션</SectionHeading>
+            <SectionHeading>{t('connect.advanced')}</SectionHeading>
             <div className={s.formGrid}>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>DTR / RTS 신호</label>
+                <label className={s.fieldLabel}>{t('connect.dtrRts')}</label>
                 <SegmentedControl
-                  options={[{ value: 'raise', label: '올림' }, { value: 'lower', label: '내림' }, { value: 'none', label: '변경 안 함' }]}
+                  options={[{ value: 'raise', label: t('connect.raise') }, { value: 'lower', label: t('connect.lower') }, { value: 'none', label: t('connect.noChange') }]}
                   value={dtr}
                   onChange={setDtr}
                   size="sm"
                 />
               </div>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>연결 끊김 시</label>
+                <label className={s.fieldLabel}>{t('connect.onDisconnect')}</label>
                 <SegmentedControl
-                  options={[{ value: 'auto', label: '자동 재연결' }, { value: 'ask', label: '물어보기' }, { value: 'none', label: '재연결 안 함' }]}
+                  options={[{ value: 'auto', label: t('connect.autoReconnect') }, { value: 'ask', label: t('connect.ask') }, { value: 'none', label: t('connect.noReconnect') }]}
                   value={reconnect}
                   onChange={setReconnect}
                   size="sm"
@@ -298,11 +299,11 @@ export function ConnectPage() {
             </div>
           </div>
 
-          <SectionHeading>연결 미리보기</SectionHeading>
+          <SectionHeading>{t('connect.preview')}</SectionHeading>
           <div className={s.preview}>
-            <span className={s.previewUri}>{port || '(포트 없음)'}</span>
-            {' · '}{portParams} · {flow === 'none' ? '흐름 제어 없음' : flow}
-            {'\n'}재연결: {reconnect === 'auto' ? '자동' : reconnect === 'ask' ? '물어보기' : '안 함'}
+            <span className={s.previewUri}>{port || `(${t('connect.noPort')})`}</span>
+            {' · '}{portParams} · {flow === 'none' ? t('connect.noFlowCtrl') : flow}
+            {'\n'}{t('connect.reconnect')}: {reconnect === 'auto' ? t('connect.reconnectAuto') : reconnect === 'ask' ? t('connect.reconnectAsk') : t('connect.reconnectNone')}
           </div>
 
           {serialError && <div className={s.error}>{serialError}</div>}
@@ -310,10 +311,10 @@ export function ConnectPage() {
           <div className={s.formActions}>
             <Button variant="success" onClick={connectSerial} disabled={serialLoading || !port}>
               <span className={s.pulseDot} />
-              {serialLoading ? '연결 중…' : '연결하고 수신 시작'}
+              {serialLoading ? t('connect.connecting') : t('connect.connectBtn')}
             </Button>
             <Button size="sm" onClick={saveSerialPreset}>
-              {savedSerial || '프리셋으로 저장'}
+              {savedSerial || t('connect.savePreset')}
             </Button>
           </div>
         </div>
@@ -326,8 +327,8 @@ export function ConnectPage() {
               <path d="M3.5 11h15M11 3.5c3 3 3 12 0 15M11 3.5c-3 3-3 12 0 15"/>
             </svg>
             <div>
-              <h2 className={s.colTitle}>소켓 통신</h2>
-              <p className={s.colSub}>TCP · UDP · TLS · WebSocket 연결</p>
+              <h2 className={s.colTitle}>{t('connect.socketTitle')}</h2>
+              <p className={s.colSub}>{t('connect.socketSub')}</p>
             </div>
           </div>
 
@@ -335,18 +336,15 @@ export function ConnectPage() {
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
               <circle cx="7" cy="7" r="5.5"/><path d="M7 4.5v3M7 9.5v.5"/>
             </svg>
-            <span>
-              연결할 <b>IP 주소와 포트</b>를 입력하세요.
-              Modbus TCP는 보통 포트 <b>502</b>, FINS/UDP는 <b>9600</b>을 사용합니다.
-            </span>
+            <span>{t('connect.socketHelp')}</span>
           </div>
 
           <div className={s.formSection}>
-            <SectionHeading>연결 방식</SectionHeading>
+            <SectionHeading>{t('connect.connMode')}</SectionHeading>
             <SegmentedControl
               options={[
-                { value: 'tcp-client', label: 'TCP 클라이언트' },
-                { value: 'tcp-server', label: 'TCP 서버' },
+                { value: 'tcp-client', label: t('connect.tcpClient') },
+                { value: 'tcp-server', label: t('connect.tcpServer') },
                 { value: 'udp',        label: 'UDP' },
                 { value: 'tls',        label: 'TLS' },
                 { value: 'ws',         label: 'WebSocket' },
@@ -359,13 +357,13 @@ export function ConnectPage() {
           </div>
 
           <div className={s.formSection}>
-            <SectionHeading>주소 · 포트</SectionHeading>
+            <SectionHeading>{t('connect.addrPort')}</SectionHeading>
             <div className={s.addrRow}>
               <input
                 className={s.inp}
                 value={host}
                 onChange={e => setHost(e.target.value)}
-                placeholder="IP 주소 또는 호스트명"
+                placeholder={t('connect.hostPlaceholder')}
                 style={{ flex: 3 }}
               />
               <span className={s.colon}>:</span>
@@ -373,13 +371,13 @@ export function ConnectPage() {
                 className={s.inp}
                 value={tcpPort}
                 onChange={e => setTcpPort(e.target.value)}
-                placeholder="포트"
+                placeholder={t('connect.portPlaceholder')}
                 style={{ flex: 1 }}
               />
             </div>
             {recentHosts.length > 0 && (
               <div className={s.recentHosts}>
-                최근: {recentHosts.map((h, i) => (
+                {t('connect.recent')}{recentHosts.map((h, i) => (
                   <span key={h}>
                     <button className={s.recentHost} onClick={() => {
                       const lastColon = h.lastIndexOf(':');
@@ -394,7 +392,7 @@ export function ConnectPage() {
           </div>
 
           <div className={s.formSection}>
-            <SectionHeading>연결 설정</SectionHeading>
+            <SectionHeading>{t('connect.connSettings')}</SectionHeading>
             <div className={s.formGrid}>
               <div className={s.formField}>
                 <label className={s.fieldLabel}>Keepalive</label>
@@ -404,30 +402,30 @@ export function ConnectPage() {
                 </div>
               </div>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>연결 대기</label>
+                <label className={s.fieldLabel}>{t('connect.connTimeout')}</label>
                 <div className={s.inlineRow}>
                   <input className={s.inpSm} type="number" value={timeout} onChange={e => setTimeout_(Number(e.target.value))} />
                   <span className={s.unit}>s</span>
                 </div>
               </div>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>재연결</label>
+                <label className={s.fieldLabel}>{t('connect.reconnect')}</label>
                 <SegmentedControl
                   size="sm"
                   options={[
-                    { value: 'auto', label: '자동 (백오프)' },
-                    { value: 'manual', label: '수동' },
-                    { value: 'none', label: '안 함' },
+                    { value: 'auto', label: t('connect.reconnectAutoBackoff') },
+                    { value: 'manual', label: t('connect.reconnectManual') },
+                    { value: 'none', label: t('connect.reconnectNoneOpt') },
                   ]}
                   value={tcpReconnect}
                   onChange={setTcpReconnect}
                 />
               </div>
               <div className={s.formField}>
-                <label className={s.fieldLabel}>Nagle 알고리즘</label>
+                <label className={s.fieldLabel}>{t('connect.nagle')}</label>
                 <SegmentedControl
                   size="sm"
-                  options={[{ value: 'on', label: '켜기' }, { value: 'off', label: '끄기 (저지연)' }]}
+                  options={[{ value: 'on', label: t('connect.nagleOn') }, { value: 'off', label: t('connect.nagleOff') }]}
                   value={nagle}
                   onChange={setNagle}
                 />
@@ -435,11 +433,11 @@ export function ConnectPage() {
             </div>
           </div>
 
-          <SectionHeading>연결 주소 미리보기</SectionHeading>
+          <SectionHeading>{t('connect.addrPreview')}</SectionHeading>
           <div className={s.preview}>
             <span className={s.previewUri}>{tcpUri}</span>
-            {'\n'}keepalive {keepalive}초 · {nagle === 'off' ? 'nodelay' : 'nagle on'} · {tcpReconnect === 'auto' ? '자동 재연결' : '수동'}
-            {recentHosts.length > 0 && `\n최근 사용: ${recentHosts.join(', ')}`}
+            {'\n'}keepalive {keepalive}s · {nagle === 'off' ? t('connect.nodelay') : t('connect.nagleOnShort')} · {tcpReconnect === 'auto' ? t('connect.autoReconnect') : t('connect.reconnectManual')}
+            {recentHosts.length > 0 && `\n${t('connect.recentUsed')}${recentHosts.join(', ')}`}
           </div>
 
           {tcpError && <div className={s.error}>{tcpError}</div>}
@@ -447,28 +445,28 @@ export function ConnectPage() {
           <div className={s.formActions}>
             <Button variant="success" onClick={connectTcp} disabled={tcpLoading || !host}>
               <span className={s.pulseDot} />
-              {tcpLoading ? '연결 중…' : '연결하고 수신 시작'}
+              {tcpLoading ? t('connect.connecting') : t('connect.connectBtn')}
             </Button>
             <Button size="sm" disabled={!host || tcpLoading} onClick={async () => {
               if (!host) return;
-              setTestStatus('테스트 중…');
+              setTestStatus(t('connect.testing'));
               try {
                 const testPort = parseInt(tcpPort, 10);
-                if (isNaN(testPort) || testPort < 1 || testPort > 65535) { setTestStatus('포트 번호 오류'); setTimeout(() => setTestStatus(''), 3000); return; }
+                if (isNaN(testPort) || testPort < 1 || testPort > 65535) { setTestStatus(t('connect.portNumError')); setTimeout(() => setTestStatus(''), 3000); return; }
                 const id = await api.connectTcp(host, testPort);
                 await api.disconnect(id);
-                setTestStatus('연결 가능 ✓');
+                setTestStatus(t('connect.testOk'));
               } catch (e: any) {
                 const msg = String(e).split(':').pop()?.trim() ?? String(e);
-                setTestStatus(`실패: ${msg}`);
+                setTestStatus(`${t('connect.testFailed')}${msg}`);
               }
               setTimeout(() => setTestStatus(''), 3000);
             }}>
-              연결 테스트
+              {t('connect.test')}
             </Button>
             {testStatus && <span className={s.testStatus}>{testStatus}</span>}
             <Button size="sm" style={{ marginLeft: 'auto' }} onClick={saveTcpPreset}>
-              {savedTcp || '프리셋으로 저장'}
+              {savedTcp || t('connect.savePreset')}
             </Button>
           </div>
         </div>
@@ -479,13 +477,13 @@ export function ConnectPage() {
           <>
             <StatusChip dot={connectedSessions.length > 0 ? 'var(--ok)' : 'var(--ink-dim)'}>
               {connectedSessions.length > 0
-                ? `${connectedSessions.length}개 세션 활성`
-                : '현재 연결된 장치 없음'}
+                ? `${connectedSessions.length}${t('connect.sessionsActive')}`
+                : t('connect.noDevices')}
             </StatusChip>
-            {ports.length > 0 && <span>FTDI 장치 {ports.length}개 감지</span>}
+            {ports.length > 0 && <span>{ports.length} {t('connect.port')}(s)</span>}
           </>
         }
-        right={<span>시리얼 설정은 연결 시에 적용됩니다 · Esc로 취소</span>}
+        right={<span>{t('connect.statusRight')}</span>}
       />
     </div>
   );

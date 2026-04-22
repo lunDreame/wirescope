@@ -114,6 +114,11 @@ function loadSavedFilters(): SavedFilter[] {
   } catch { return []; }
 }
 
+function detectLanguage(): 'ko' | 'en' {
+  const lang = (navigator.language ?? '').toLowerCase();
+  return lang.startsWith('ko') ? 'ko' : 'en';
+}
+
 const defaultSettings: AppSettings = {
   theme:       'light',
   byteFormat:  'hex',
@@ -121,6 +126,7 @@ const defaultSettings: AppSettings = {
   showGapRows: true,
   accentHue:   245,
   autoScroll:  true,
+  language:    detectLanguage(),
 };
 
 const initialState: AppState = {
@@ -140,7 +146,7 @@ const initialState: AppState = {
   isReceiving:   false,
   packetNotes:   {},
   consoleLog:    [
-    { ts: Date.now(), text: '앱이 시작되었습니다', kind: 'info' },
+    { ts: Date.now(), text: 'WireScope started', kind: 'info' },
   ],
 };
 
@@ -297,7 +303,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (preset.mode !== 'trigger' || !preset.trigger || !activeSessionId) continue;
         if (matchesTrigger(pkt, preset.trigger)) {
           api.sendBytes(preset.bytes, activeSessionId).then(() => {
-            dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `트리거 [${preset.name}]: ${preset.bytes}`, kind: 'tx' } });
+            dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `Trigger [${preset.name}]: ${preset.bytes}`, kind: 'tx' } });
           }).catch(() => {});
         }
       }

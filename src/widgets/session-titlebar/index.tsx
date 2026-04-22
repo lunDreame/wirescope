@@ -1,15 +1,8 @@
 import s from './TitleBar.module.css';
 import { useApp } from '../../app/store';
 import * as api from '../../shared/api/tauri';
+import { useT } from '../../shared/lib/i18n';
 import type { Screen } from '../../shared/types';
-
-const SCREENS: { id: Screen; label: string }[] = [
-  { id: 'workspace', label: '작업 화면' },
-  { id: 'connect',   label: '연결' },
-  { id: 'splitter',  label: '패킷 분리' },
-  { id: 'checksum',  label: '체크섬' },
-  { id: 'analyzer',  label: '분석' },
-];
 
 const WireScopeLogo = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -21,13 +14,22 @@ const WireScopeLogo = () => (
 export function SessionTitleBar() {
   const { state, dispatch } = useApp();
   const { sessions, screen } = state;
+  const t = useT();
+
+  const SCREENS: { id: Screen; label: string }[] = [
+    { id: 'workspace', label: t('nav.workspace') },
+    { id: 'connect',   label: t('nav.connect') },
+    { id: 'splitter',  label: t('nav.splitter') },
+    { id: 'checksum',  label: t('nav.checksum') },
+    { id: 'analyzer',  label: t('nav.analyzer') },
+  ];
 
   const screenLabel = SCREENS.find(s => s.id === screen)?.label ?? '';
 
   async function closeSession(id: string) {
     try { await api.disconnect(id); } catch {}
     dispatch({ type: 'REMOVE_SESSION', id });
-    dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `세션 닫힘: ${id}`, kind: 'info' } });
+    dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `Session closed: ${id}`, kind: 'info' } });
   }
 
   return (
@@ -58,14 +60,14 @@ export function SessionTitleBar() {
             <button
               className={s.tabClose}
               onClick={e => { e.stopPropagation(); closeSession(sess.id); }}
-              title="세션 닫기"
+              title={t('nav.closeSession')}
             >×</button>
           </div>
         ))}
         <button
           className={s.newTab}
           onClick={() => dispatch({ type: 'SET_SCREEN', screen: 'connect' })}
-          title="새 연결 추가"
+          title={t('nav.addSession')}
         >+</button>
       </div>
 

@@ -3,6 +3,7 @@ import s from './Analyzer.module.css';
 import { StatusBar, StatusChip, StatusSep } from '../../shared/ui/StatusBar';
 import { SectionHeading } from '../../shared/ui/SectionHeading';
 import { useApp } from '../../app/store';
+import { useT } from '../../shared/lib/i18n';
 import { formatSize, formatDelta } from '../../shared/lib/format';
 import type { TimingStats } from '../../shared/types';
 
@@ -21,6 +22,7 @@ function StatCard({ label, value, unit, sub }: { label: string; value: string | 
 
 export function AnalyzerPage() {
   const { state } = useApp();
+  const t = useT();
   const packets = state.packets;
 
   const stats: TimingStats | null = useMemo(() => {
@@ -104,8 +106,8 @@ export function AnalyzerPage() {
         {/* Left: Stats */}
         <div className={s.statsPanel}>
           <div className={s.panelHeader}>
-            <h2 className={s.panelTitle}>통계 분석</h2>
-            <p className={s.panelSub}>{packets.length.toLocaleString()}개 패킷 · {formatSize(state.bufferBytes)}</p>
+            <h2 className={s.panelTitle}>{t('analyzer.title')}</h2>
+            <p className={s.panelSub}>{packets.length.toLocaleString()} pkts · {formatSize(state.bufferBytes)}</p>
           </div>
 
           {packets.length < 2 ? (
@@ -113,46 +115,46 @@ export function AnalyzerPage() {
               <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.2">
                 <path d="M6 32 L12 22 L18 26 L24 16 L30 20 L36 10"/>
               </svg>
-              <span>통계를 계산하려면 2개 이상의 패킷이 필요합니다</span>
+              <span>{t('analyzer.needMore')}</span>
             </div>
           ) : stats ? (
             <>
               <div className={s.section}>
-                <SectionHeading>트래픽 개요</SectionHeading>
+                <SectionHeading>{t('analyzer.traffic')}</SectionHeading>
                 <div className={s.statsGrid}>
-                  <StatCard label="전체 패킷" value={stats.total_packets} />
-                  <StatCard label="전체 바이트" value={formatSize(stats.total_bytes)} />
-                  <StatCard label="패킷/초" value={stats.packets_per_sec.toFixed(1)} unit="pps" />
-                  <StatCard label="체크섬 오류" value={stats.checksum_fail}
-                    sub={stats.checksum_fail > 0 ? `${((stats.checksum_fail / total) * 100).toFixed(1)}%` : '오류 없음'} />
+                  <StatCard label={t('analyzer.totalPackets')} value={stats.total_packets} />
+                  <StatCard label={t('analyzer.totalBytes')} value={formatSize(stats.total_bytes)} />
+                  <StatCard label={t('analyzer.pps')} value={stats.packets_per_sec.toFixed(1)} unit="pps" />
+                  <StatCard label={t('analyzer.csumErrors')} value={stats.checksum_fail}
+                    sub={stats.checksum_fail > 0 ? `${((stats.checksum_fail / total) * 100).toFixed(1)}%` : t('analyzer.noErrors')} />
                 </div>
               </div>
 
               <div className={s.section}>
-                <SectionHeading>타이밍 분석</SectionHeading>
+                <SectionHeading>{t('analyzer.timing')}</SectionHeading>
                 <div className={s.statsGrid}>
-                  <StatCard label="평균 간격" value={formatDelta(stats.avg_gap_ms)} />
-                  <StatCard label="최소 간격" value={formatDelta(stats.min_gap_ms)} />
-                  <StatCard label="최대 간격" value={formatDelta(stats.max_gap_ms)} />
-                  <StatCard label="표준편차" value={formatDelta(stats.std_gap_ms)} />
+                  <StatCard label={t('analyzer.avgGap')} value={formatDelta(stats.avg_gap_ms)} />
+                  <StatCard label={t('analyzer.minGap')} value={formatDelta(stats.min_gap_ms)} />
+                  <StatCard label={t('analyzer.maxGap')} value={formatDelta(stats.max_gap_ms)} />
+                  <StatCard label={t('analyzer.stdDev')} value={formatDelta(stats.std_gap_ms)} />
                 </div>
               </div>
 
               {stats.cycle_count > 0 && (
                 <div className={s.section}>
-                  <SectionHeading>사이클 분석 (TX→RX)</SectionHeading>
+                  <SectionHeading>{t('analyzer.cycle')}</SectionHeading>
                   <div className={s.statsGrid}>
-                    <StatCard label="사이클 수" value={stats.cycle_count} />
-                    <StatCard label="평균 응답 시간" value={formatDelta(stats.avg_cycle_ms)} />
+                    <StatCard label={t('analyzer.cycleCount')} value={stats.cycle_count} />
+                    <StatCard label={t('analyzer.avgResponse')} value={formatDelta(stats.avg_cycle_ms)} />
                     {stats.avg_idle_ms > 0 && (
-                      <StatCard label="평균 유휴 시간" value={formatDelta(stats.avg_idle_ms)} />
+                      <StatCard label={t('analyzer.avgIdle')} value={formatDelta(stats.avg_idle_ms)} />
                     )}
                   </div>
                 </div>
               )}
 
               <div className={s.section}>
-                <SectionHeading>방향 분포</SectionHeading>
+                <SectionHeading>{t('analyzer.direction')}</SectionHeading>
                 <div className={s.dirBar}>
                   <div className={s.dirBarTx} style={{ width: `${(txCount / total) * 100}%` }} />
                   <div className={s.dirBarRx} style={{ width: `${(rxCount / total) * 100}%` }} />
@@ -169,21 +171,21 @@ export function AnalyzerPage() {
         {/* Center: Graphs */}
         <div className={s.graphPanel}>
           <div className={s.panelHeader}>
-            <h2 className={s.panelTitle}>타이밍 그래프</h2>
-            <p className={s.panelSub}>최근 60개 패킷 간격</p>
+            <h2 className={s.panelTitle}>{t('analyzer.gapGraph')}</h2>
+            <p className={s.panelSub}>{t('analyzer.gapGraphSub')}</p>
           </div>
 
           {gapTrend.length < 2 ? (
             <div className={s.emptyGraph}>
-              데이터가 부족합니다
+              {t('analyzer.notEnoughData')}
             </div>
           ) : (
             <GapTrendChart gaps={gapTrend} />
           )}
 
           <div className={s.panelHeader} style={{ marginTop: 24 }}>
-            <h2 className={s.panelTitle}>바이트 빈도</h2>
-            <p className={s.panelSub}>0x00–0xFF 전체 값 분포</p>
+            <h2 className={s.panelTitle}>{t('analyzer.byteFreq')}</h2>
+            <p className={s.panelSub}>{t('analyzer.byteFreqSub')}</p>
           </div>
 
           <ByteFreqChart freq={byteFreq} maxFreq={maxFreq} sofBytes={state.splitter.sof} />
@@ -192,12 +194,12 @@ export function AnalyzerPage() {
         {/* Right: Top bytes */}
         <div className={s.topPanel}>
           <div className={s.panelHeader}>
-            <h2 className={s.panelTitle}>상위 바이트 값</h2>
-            <p className={s.panelSub}>가장 많이 등장한 16개</p>
+            <h2 className={s.panelTitle}>{t('analyzer.topBytes')}</h2>
+            <p className={s.panelSub}>{t('analyzer.topBytesSub')}</p>
           </div>
 
           {topBytes[0]?.count === 0 ? (
-            <div className={s.emptyStats}>패킷 없음</div>
+            <div className={s.emptyStats}>{t('analyzer.noPackets')}</div>
           ) : (
             <div className={s.topList}>
               {topBytes.map(({ byte, count }, i) => (
@@ -219,7 +221,7 @@ export function AnalyzerPage() {
                 <path d="M7 2L12.5 12H1.5L7 2z"/>
                 <path d="M7 6v3M7 10.5v.5"/>
               </svg>
-              <span>체크섬 오류 {stats.checksum_fail}개 감지</span>
+              <span>{t('analyzer.errorsDetected')}{stats.checksum_fail}{t('analyzer.errorsDetected2')}</span>
             </div>
           )}
         </div>
@@ -229,17 +231,17 @@ export function AnalyzerPage() {
         left={
           <>
             <StatusChip dot={packets.length > 0 ? 'var(--brand)' : 'var(--ink-dim)'}>
-              {packets.length > 0 ? `${packets.length.toLocaleString()}개 패킷 분석됨` : '패킷 없음'}
+              {packets.length > 0 ? `${packets.length.toLocaleString()}${t('analyzer.packetsAnalyzed')}` : t('analyzer.noPackets')}
             </StatusChip>
             {stats && (
               <>
                 <StatusSep />
-                <span>평균 간격 {formatDelta(stats.avg_gap_ms)} · {stats.packets_per_sec.toFixed(1)} pps</span>
+                <span>{t('analyzer.avgGap')} {formatDelta(stats.avg_gap_ms)} · {stats.packets_per_sec.toFixed(1)} pps</span>
               </>
             )}
           </>
         }
-        right={<span>실시간으로 업데이트됩니다</span>}
+        right={<span>{t('analyzer.statusRight')}</span>}
       />
     </div>
   );
