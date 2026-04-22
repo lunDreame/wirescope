@@ -3,7 +3,7 @@
 시리얼/소켓 통신 모니터
 
 ## 다운로드
-[Click](https://github.com/lunDreame/wirescope/releases)
+[릴리즈](https://github.com/lunDreame/wirescope/releases)
 
 ## 주요 기능
 
