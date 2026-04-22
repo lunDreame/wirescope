@@ -6,6 +6,7 @@ import { Button } from '../../shared/ui/Button';
 import { Badge } from '../../shared/ui/Badge';
 import { HexDump } from '../../shared/ui/HexDump';
 import { useApp } from '../../app/store';
+import { useT } from '../../shared/lib/i18n';
 import * as api from '../../shared/api/tauri';
 import { CHECKSUM_PRESETS } from '../../shared/config/tokens';
 import type { ChecksumResult } from '../../shared/types';
@@ -25,8 +26,24 @@ function parseHexBytes(input: string): number[] | null {
 
 const GROUPS = ['CRC-16', 'CRC-32', 'Simple'] as const;
 
+const CSUM_DESC_KEYS: Record<string, string> = {
+  'crc16-modbus': 'csum.modbus.desc',
+  'crc16-kermit': 'csum.kermit.desc',
+  'crc16-dnp':    'csum.dnp.desc',
+  'sum8':         'csum.sum8.desc',
+  'sum16':        'csum.sum16.desc',
+  'xor':          'csum.xor.desc',
+  'fletcher16':   'csum.fletcher16.desc',
+};
+
+function csumDesc(id: string, fallback: string, t: (k: string) => string): string {
+  const key = CSUM_DESC_KEYS[id];
+  return key ? t(key) : fallback;
+}
+
 export function ChecksumPage() {
   const { state } = useApp();
+  const t = useT();
   const [hexInput, setHexInput] = useState('');
   const [results, setResults] = useState<ChecksumResult[]>([]);
   const [computing, setComputing] = useState(false);
@@ -47,7 +64,7 @@ export function ChecksumPage() {
   }
 
   async function computeAll() {
-    if (!activeBytes) { setError('올바른 16진수를 입력하세요'); return; }
+    if (!activeBytes) { setError(t('checksum.invalidInput')); return; }
     setComputing(true); setError('');
     try {
       const res = await api.computeAllChecksums(toHexString(activeBytes));
@@ -59,7 +76,7 @@ export function ChecksumPage() {
   }
 
   async function computeSingle() {
-    if (!activeBytes) { setError('올바른 16진수를 입력하세요'); return; }
+    if (!activeBytes) { setError(t('checksum.invalidInput')); return; }
     setComputing(true); setError('');
     try {
       const res = await api.computeChecksum(selectedAlgo, toHexString(activeBytes));
@@ -98,7 +115,7 @@ export function ChecksumPage() {
         {/* Left: Library */}
         <div className={s.library}>
           <div className={s.libHeader}>
-            <h2 className={s.libTitle}>체크섬 라이브러리</h2>
+            <h2 className={s.libTitle}>{t('checksum.library')}</h2>
           </div>
           {grouped.map(({ group, items }) => (
             <div key={group} className={s.libGroup}>
@@ -110,7 +127,7 @@ export function ChecksumPage() {
                   onClick={() => setSelectedAlgo(p.id)}
                 >
                   <span className={s.libItemLabel}>{p.label}</span>
-                  <span className={s.libItemDesc}>{p.desc}</span>
+                  <span className={s.libItemDesc}>{csumDesc(p.id, p.desc, t)}</span>
                 </button>
               ))}
             </div>
@@ -120,8 +137,8 @@ export function ChecksumPage() {
         {/* Center: Editor */}
         <div className={s.editor}>
           <div className={s.editorHeader}>
-            <h2 className={s.editorTitle}>체크섬 계산기</h2>
-            <p className={s.editorSub}>16진수 바이트를 입력하고 다양한 알고리즘으로 계산합니다</p>
+            <h2 className={s.editorTitle}>{t('checksum.editorTitle')}</h2>
+            <p className={s.editorSub}>{t('checksum.editorSub')}</p>
           </div>
 
           {/* Input mode */}
@@ -129,35 +146,35 @@ export function ChecksumPage() {
             <button
               className={`${s.modeTab} ${inputMode === 'hex' ? s.modeTabActive : ''}`}
               onClick={() => setInputMode('hex')}
-            >직접 입력</button>
+            >{t('checksum.directInput')}</button>
             <button
               className={`${s.modeTab} ${inputMode === 'packet' ? s.modeTabActive : ''}`}
               onClick={() => setInputMode('packet')}
-            >패킷에서 선택</button>
+            >{t('checksum.fromPacket')}</button>
           </div>
 
           {inputMode === 'hex' ? (
             <div className={s.hexEditor}>
-              <SectionHeading>16진수 입력</SectionHeading>
+              <SectionHeading>{t('checksum.hexInput')}</SectionHeading>
               <textarea
                 className={s.hexTextarea}
                 value={hexInput}
                 onChange={e => setHexInput(e.target.value)}
-                placeholder="16진수 바이트를 공백으로 구분하여 입력&#10;예: 68 01 00 16"
+                placeholder={t('checksum.hexPlaceholder')}
                 spellCheck={false}
               />
               <div className={s.inputMeta}>
                 {bytes
-                  ? <span>{bytes.length}바이트 · {bytes.reduce((a, b) => a + b, 0).toString(16).toUpperCase().padStart(4, '0')} 합계</span>
-                  : <span className={s.inputError}>올바르지 않은 16진수 입력</span>
+                  ? <span>{bytes.length}{t('checksum.bytesSum')}{bytes.reduce((a, b) => a + b, 0).toString(16).toUpperCase().padStart(4, '0')}</span>
+                  : <span className={s.inputError}>{t('checksum.invalidHex')}</span>
                 }
               </div>
             </div>
           ) : (
             <div className={s.packetPicker}>
-              <SectionHeading>패킷 선택</SectionHeading>
+              <SectionHeading>{t('checksum.packetSelect')}</SectionHeading>
               {state.packets.length === 0 ? (
-                <div className={s.emptyPicker}>수신된 패킷이 없습니다</div>
+                <div className={s.emptyPicker}>{t('checksum.noPackets')}</div>
               ) : (
                 <div className={s.pickerList}>
                   {state.packets.slice(-20).reverse().map(pkt => (
@@ -180,14 +197,14 @@ export function ChecksumPage() {
           {activeBytes && activeBytes.length > 0 && (
             <div className={s.hexDumpSection}>
               <div className={s.hexDumpHeader}>
-                <SectionHeading>HEX 덤프</SectionHeading>
+                <SectionHeading>{t('checksum.hexDump')}</SectionHeading>
                 <div className={s.rangeInputs}>
-                  <label className={s.rangeLabel}>강조 범위</label>
+                  <label className={s.rangeLabel}>{t('checksum.hlRange')}</label>
                   <input className={s.rangeInp} value={highlightFrom}
-                    onChange={e => setHighlightFrom(e.target.value)} placeholder="시작" />
+                    onChange={e => setHighlightFrom(e.target.value)} placeholder={t('checksum.from')} />
                   <span className={s.rangeSep}>–</span>
                   <input className={s.rangeInp} value={highlightTo}
-                    onChange={e => setHighlightTo(e.target.value)} placeholder="끝" />
+                    onChange={e => setHighlightTo(e.target.value)} placeholder={t('checksum.to')} />
                 </div>
               </div>
               <HexDump bytes={activeBytes} highlights={hlRange} />
@@ -199,10 +216,10 @@ export function ChecksumPage() {
           {/* Actions */}
           <div className={s.actions}>
             <Button variant="primary" onClick={computeAll} disabled={computing || !activeBytes}>
-              {computing ? '계산 중…' : '전체 알고리즘 계산'}
+              {computing ? t('checksum.computing') : t('checksum.computeAll')}
             </Button>
             <Button onClick={computeSingle} disabled={computing || !activeBytes}>
-              {CHECKSUM_PRESETS.find(p => p.id === selectedAlgo)?.label ?? '선택된 알고리즘'} 계산
+              {CHECKSUM_PRESETS.find(p => p.id === selectedAlgo)?.label ?? t('checksum.selectedAlgo')}
             </Button>
           </div>
         </div>
@@ -210,9 +227,9 @@ export function ChecksumPage() {
         {/* Right: Results */}
         <div className={s.results}>
           <div className={s.resultsHeader}>
-            <h2 className={s.resultsTitle}>계산 결과</h2>
+            <h2 className={s.resultsTitle}>{t('checksum.resultsTitle')}</h2>
             {results.length > 0 && (
-              <button className={s.clearBtn} onClick={() => setResults([])}>지우기</button>
+              <button className={s.clearBtn} onClick={() => setResults([])}>{t('checksum.clear')}</button>
             )}
           </div>
 
@@ -222,8 +239,8 @@ export function ChecksumPage() {
                 <circle cx="18" cy="18" r="13"/>
                 <path d="M13 18h10M18 13v10"/>
               </svg>
-              <span>계산 결과가 없습니다</span>
-              <span className={s.emptyHint}>바이트를 입력하고 계산 버튼을 누르세요</span>
+              <span>{t('checksum.noResults')}</span>
+              <span className={s.emptyHint}>{t('checksum.noResultsHint')}</span>
             </div>
           ) : (
             <div className={s.resultList}>
@@ -264,7 +281,7 @@ export function ChecksumPage() {
           {/* Quick reference */}
           {selectedAlgo && (
             <div className={s.algoInfo}>
-              <SectionHeading>알고리즘 정보</SectionHeading>
+              <SectionHeading>{t('checksum.algoInfo')}</SectionHeading>
               {(() => {
                 const p = CHECKSUM_PRESETS.find(c => c.id === selectedAlgo);
                 if (!p) return null;
@@ -272,7 +289,7 @@ export function ChecksumPage() {
                   <div className={s.algoCard}>
                     <div className={s.algoName}>{p.label}</div>
                     <div className={s.algoGroup}>{p.group}</div>
-                    <div className={s.algoDesc}>{p.desc}</div>
+                    <div className={s.algoDesc}>{csumDesc(p.id, p.desc, t)}</div>
                   </div>
                 );
               })()}
@@ -285,13 +302,13 @@ export function ChecksumPage() {
         left={
           <>
             <StatusChip dot={results.length > 0 ? 'var(--brand)' : 'var(--ink-dim)'}>
-              {results.length > 0 ? `${results.length}개 결과` : '대기 중'}
+              {results.length > 0 ? `${results.length}${t('checksum.resultCount')}` : t('checksum.waiting')}
             </StatusChip>
             <StatusSep />
-            {activeBytes && <span>{activeBytes.length}바이트 입력됨</span>}
+            {activeBytes && <span>{activeBytes.length}{t('checksum.bytesInput')}</span>}
           </>
         }
-        right={<span>선택된 알고리즘: {CHECKSUM_PRESETS.find(p => p.id === selectedAlgo)?.label ?? selectedAlgo}</span>}
+        right={<span>{t('checksum.selectedAlgo')}: {CHECKSUM_PRESETS.find(p => p.id === selectedAlgo)?.label ?? selectedAlgo}</span>}
       />
     </div>
   );

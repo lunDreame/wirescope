@@ -1,26 +1,28 @@
 import { useState, useEffect } from 'react';
 import s from './Inspector.module.css';
 import { useApp, useSelectedPacket } from '../../app/store';
+import { useT } from '../../shared/lib/i18n';
 import { HexDump } from '../../shared/ui/HexDump';
 import { SectionHeading } from '../../shared/ui/SectionHeading';
 import { formatTimestamp, formatDelta } from '../../shared/lib/format';
 import type { ChecksumResult } from '../../shared/types';
 import * as api from '../../shared/api/tauri';
 
-const TABS = [
-  { id: 'detail',   label: '상세' },
-  { id: 'analysis', label: '분석' },
-  { id: 'graph',    label: '그래프' },
-  { id: 'notes',    label: '메모' },
-] as const;
-
-type TabId = typeof TABS[number]['id'];
+type TabId = 'detail' | 'analysis' | 'graph' | 'notes';
 
 export function PacketInspector() {
   const { state, dispatch } = useApp();
   const livePacket = useSelectedPacket();
   const [pinnedId, setPinnedId] = useState<number | null>(null);
   const activeTab = state.inspectorTab as TabId;
+  const t = useT();
+
+  const TABS: { id: TabId; label: string }[] = [
+    { id: 'detail',   label: t('inspector.detail') },
+    { id: 'analysis', label: t('inspector.analysis') },
+    { id: 'graph',    label: t('inspector.graph') },
+    { id: 'notes',    label: t('inspector.notes') },
+  ];
 
   const packet = pinnedId !== null
     ? (state.packets.find(p => p.id === pinnedId) ?? livePacket)
@@ -46,7 +48,7 @@ export function PacketInspector() {
         <div style={{ flex: 1 }} />
         <button
           className={`${s.pinBtn} ${isPinned ? s.pinned : ''}`}
-          title={isPinned ? '고정 해제' : livePacket ? '현재 패킷 고정' : '패킷을 먼저 선택하세요'}
+          title={isPinned ? t('inspector.unpin') : livePacket ? t('inspector.pin') : t('inspector.pinFirst')}
           disabled={!isPinned && !livePacket}
           onClick={() => setPinnedId(isPinned ? null : (livePacket?.id ?? null))}
         >
@@ -71,6 +73,7 @@ function DetailTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> })
   const [checksums, setChecksums] = useState<ChecksumResult[]>([]);
   const { state } = useApp();
   const { settings } = state;
+  const t = useT();
 
   useEffect(() => {
     if (!packet) { setChecksums([]); return; }
@@ -85,7 +88,7 @@ function DetailTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> })
           <rect x="4" y="8" width="28" height="20" rx="2"/>
           <path d="M4 16h28M10 22h8M10 26h16"/>
         </svg>
-        <div>패킷을 선택하면 상세 정보가 표시됩니다</div>
+        <div>{t('inspector.emptyHint')}</div>
       </div>
     );
   }
@@ -126,32 +129,32 @@ function DetailTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> })
     <>
       <div className={s.packetHead}>
         <span className={`${s.dirBadge} ${s['dir-' + dir]}`}>
-          {dir === 'rx' ? '← 수신' : '→ 송신'}
+          {dir === 'rx' ? t('inspector.rx') : t('inspector.tx')}
         </span>
-        <span className={s.packetTitle}>패킷 #{packet.id}</span>
+        <span className={s.packetTitle}>{t('inspector.packet')} #{packet.id}</span>
         <span className={s.ts}>+{formatTimestamp(packet.timestamp_ms)}</span>
       </div>
 
       <div className={s.kv}>
-        <span className={s.k}>연결</span><span className={s.v}>{packet.session_id}</span>
-        <span className={s.k}>간격</span>
+        <span className={s.k}>{t('inspector.session')}</span><span className={s.v}>{packet.session_id}</span>
+        <span className={s.k}>{t('inspector.gap')}</span>
         <span className={s.v}>{packet.gap_ms !== null ? formatDelta(packet.gap_ms) : '—'}</span>
-        <span className={s.k}>길이</span>
-        <span className={s.v}>{packet.bytes.length} 바이트</span>
-        <span className={s.k}>체크섬</span>
+        <span className={s.k}>{t('inspector.length')}</span>
+        <span className={s.v}>{packet.bytes.length} {t('inspector.bytes')}</span>
+        <span className={s.k}>{t('inspector.checksum')}</span>
         <span className={`${s.v} ${packet.checksum_ok === true ? s.ckOk : packet.checksum_ok === false ? s.ckBad : ''}`}>
-          {packet.checksum_ok === true ? '✓ 유효' : packet.checksum_ok === false ? '✗ 오류' : '—'}
+          {packet.checksum_ok === true ? t('inspector.csumOk') : packet.checksum_ok === false ? t('inspector.csumErr') : '—'}
         </span>
       </div>
 
       <SectionHeading>
-        {{ hex: '16진수', ascii: '아스키', dec: '10진수', bin: '2진수' }[settings.byteFormat] ?? '16진수'} 덤프
+        { { hex: t('inspector.hex'), ascii: t('inspector.ascii'), dec: t('inspector.dec'), bin: t('inspector.bin') }[settings.byteFormat] ?? t('inspector.hex') }{t('inspector.dump')}
       </SectionHeading>
       <HexDump bytes={packet.bytes} highlights={highlights} format={settings.byteFormat} />
 
       {checksums.length > 0 && (
         <>
-          <SectionHeading>체크섬 계산 결과</SectionHeading>
+          <SectionHeading>{t('inspector.csumResults')}</SectionHeading>
           <div className={s.csTable}>
             {checksums.map(ck => (
               <div key={ck.algorithm} className={s.csRow}>
@@ -169,7 +172,8 @@ function DetailTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> })
 
 function AnalysisTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> }) {
   const { state } = useApp();
-  if (!packet) return <div className={s.empty}>패킷을 선택하세요</div>;
+  const t = useT();
+  if (!packet) return <div className={s.empty}>{t('inspector.selectPacket')}</div>;
 
   // Find nearby packets for context
   const allPackets = state.packets;
@@ -178,7 +182,7 @@ function AnalysisTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> 
 
   return (
     <>
-      <SectionHeading>주변 패킷 컨텍스트</SectionHeading>
+      <SectionHeading>{t('inspector.context')}</SectionHeading>
       <div className={s.ctxList}>
         {nearby.map(p => (
           <div key={p.id} className={`${s.ctxRow} ${p.id === packet.id ? s.ctxActive : ''}`}>
@@ -197,13 +201,14 @@ function AnalysisTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> 
         ))}
       </div>
 
-      <SectionHeading>바이트 분포</SectionHeading>
+      <SectionHeading>{t('inspector.byteDist')}</SectionHeading>
       <ByteHistogram bytes={packet.bytes} />
     </>
   );
 }
 
 function ByteHistogram({ bytes }: { bytes: number[] }) {
+  const t = useT();
   const freq = new Array(256).fill(0);
   bytes.forEach(b => freq[b]++);
   const max = Math.max(...freq, 1);
@@ -216,7 +221,7 @@ function ByteHistogram({ bytes }: { bytes: number[] }) {
             key={i}
             className={s.histBar}
             style={{ height: `${(f / max) * 100}%` }}
-            title={`0x${i.toString(16).padStart(2, '0').toUpperCase()}: ${f}회`}
+            title={`0x${i.toString(16).padStart(2, '0').toUpperCase()}: ${f}${t('inspector.freqTimes')}`}
           />
         ) : null
       ))}
@@ -226,13 +231,14 @@ function ByteHistogram({ bytes }: { bytes: number[] }) {
 
 function GraphTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> }) {
   const { state } = useApp();
-  if (!packet) return <div className={s.empty}>패킷을 선택하세요</div>;
+  const t = useT();
+  if (!packet) return <div className={s.empty}>{t('inspector.selectPacket')}</div>;
 
   const allPackets = state.packets
     .filter(p => p.session_id === packet.session_id && p.gap_ms !== null)
     .slice(-50);
 
-  if (allPackets.length === 0) return <div className={s.empty}>데이터가 충분하지 않습니다</div>;
+  if (allPackets.length === 0) return <div className={s.empty}>{t('inspector.notEnoughData')}</div>;
 
   const gaps = allPackets.map(p => p.gap_ms!);
   const maxGap = Math.max(...gaps, 1);
@@ -243,7 +249,7 @@ function GraphTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> }) 
 
   return (
     <>
-      <SectionHeading>간격 추이 · 최근 {allPackets.length}개</SectionHeading>
+      <SectionHeading>{t('inspector.gapTrend')}{allPackets.length}</SectionHeading>
       <div className={s.plot}>
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
           <defs>
@@ -256,16 +262,16 @@ function GraphTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> }) 
           <path d={path} stroke="oklch(0.52 0.15 245)" strokeWidth="1.5" fill="none"/>
         </svg>
         <div className={s.plotFoot}>
-          <span>이전 {allPackets.length}개</span>
-          <span>간격 (ms)</span>
-          <span>현재</span>
+          <span>{t('inspector.prev')}{allPackets.length}</span>
+          <span>{t('inspector.gapMs')}</span>
+          <span>{t('inspector.current')}</span>
         </div>
       </div>
 
       <div className={s.kv} style={{ marginTop: 12 }}>
-        <span className={s.k}>최소</span><span className={s.v}>{Math.min(...gaps).toFixed(1)} ms</span>
-        <span className={s.k}>최대</span><span className={s.v}>{Math.max(...gaps).toFixed(1)} ms</span>
-        <span className={s.k}>평균</span><span className={s.v}>{(gaps.reduce((a,b) => a+b, 0) / gaps.length).toFixed(1)} ms</span>
+        <span className={s.k}>{t('inspector.min')}</span><span className={s.v}>{Math.min(...gaps).toFixed(1)} ms</span>
+        <span className={s.k}>{t('inspector.max')}</span><span className={s.v}>{Math.max(...gaps).toFixed(1)} ms</span>
+        <span className={s.k}>{t('inspector.avg')}</span><span className={s.v}>{(gaps.reduce((a,b) => a+b, 0) / gaps.length).toFixed(1)} ms</span>
       </div>
     </>
   );
@@ -273,20 +279,21 @@ function GraphTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> }) 
 
 function NotesTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> }) {
   const { state, dispatch } = useApp();
-  if (!packet) return <div className={s.empty}>패킷을 선택하세요</div>;
+  const t = useT();
+  if (!packet) return <div className={s.empty}>{t('inspector.selectPacket')}</div>;
   const note = state.packetNotes[packet.id] ?? '';
   return (
     <>
-      <SectionHeading>메모</SectionHeading>
+      <SectionHeading>{t('inspector.notesTitle')}</SectionHeading>
       <textarea
         className={s.noteArea}
         value={note}
         onChange={e => dispatch({ type: 'SET_PACKET_NOTE', packetId: packet.id, note: e.target.value })}
-        placeholder="이 패킷에 대한 메모를 입력하세요…"
+        placeholder={t('inspector.notesPlaceholder')}
         rows={6}
       />
       <div className={s.noteHint}>
-        {note.length > 0 ? `${note.length}자 저장됨` : '패킷별 메모는 세션 동안 유지됩니다'}
+        {note.length > 0 ? `${note.length}${t('inspector.notesSaved')}` : t('inspector.notesHint')}
       </div>
     </>
   );

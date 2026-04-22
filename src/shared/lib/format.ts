@@ -6,7 +6,7 @@ export function bytesToHex(bytes: number[], sep = ' '): string {
 
 export function hexToBytes(hex: string): number[] {
   const clean = hex.replace(/[^0-9a-fA-F]/g, '');
-  if (clean.length % 2 !== 0) throw new Error('홀수 자리 HEX 문자열');
+  if (clean.length % 2 !== 0) throw new Error('Odd-length HEX string');
   return Array.from({ length: clean.length / 2 }, (_, i) =>
     parseInt(clean.slice(i * 2, i * 2 + 2), 16)
   );

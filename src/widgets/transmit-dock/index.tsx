@@ -1,20 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import s from './Dock.module.css';
 import { useApp } from '../../app/store';
+import { useT } from '../../shared/lib/i18n';
 import * as api from '../../shared/api/tauri';
 import type { TxPreset, DockTab } from '../../shared/types';
-
-const DOCK_TABS: { id: DockTab; label: string }[] = [
-  { id: 'transmit', label: '전송' },
-  { id: 'script',   label: '스크립트' },
-  { id: 'console',  label: '콘솔' },
-  { id: 'macro',    label: '매크로' },
-];
 
 const MACRO_KEYS = ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
 
 export function TransmitDock() {
   const { state, dispatch } = useApp();
+  const t = useT();
   const [tab, setTab] = useState<DockTab>('transmit');
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [quickHex, setQuickHex] = useState('');
@@ -37,7 +32,7 @@ export function TransmitDock() {
       setQuickHex('');
     } catch (e: any) {
       setQuickError(String(e));
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `오류: ${e}`, kind: 'err' } });
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `Error: ${e}`, kind: 'err' } });
     }
   }
 
@@ -48,7 +43,7 @@ export function TransmitDock() {
       await api.sendBytes(preset.bytes, activeId);
       dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `TX [${preset.name}]: ${preset.bytes}`, kind: 'tx' } });
     } catch (e: any) {
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `오류 [${preset.name}]: ${e}`, kind: 'err' } });
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('dock.presetError')} [${preset.name}]: ${e}`, kind: 'err' } });
     }
     if (preset.mode !== 'repeat') {
       dispatch({ type: 'UPDATE_TX_PRESET', preset: { ...preset, active: false } });
@@ -72,19 +67,26 @@ export function TransmitDock() {
 
   const preset = selectedPreset ? state.txPresets.find(p => p.id === selectedPreset) : null;
 
+  const DOCK_TABS: { id: DockTab; label: string }[] = [
+    { id: 'transmit', label: t('dock.transmit') },
+    { id: 'script',   label: t('dock.script') },
+    { id: 'console',  label: t('dock.console') },
+    { id: 'macro',    label: t('dock.macro') },
+  ];
+
   return (
     <div className={s.dock}>
       <div className={s.head}>
         <div className={s.tabs}>
-          {DOCK_TABS.map(t => (
+          {DOCK_TABS.map(dt => (
             <button
-              key={t.id}
-              className={`${s.tab} ${tab === t.id ? s.tabOn : ''}`}
-              onClick={() => setTab(t.id)}
+              key={dt.id}
+              className={`${s.tab} ${tab === dt.id ? s.tabOn : ''}`}
+              onClick={() => setTab(dt.id)}
             >
-              {t.label}
-              {t.id === 'transmit' && <span className={s.tabNum}>{state.txPresets.length}</span>}
-              {t.id === 'console' && state.consoleLog.length > 0 && (
+              {dt.label}
+              {dt.id === 'transmit' && <span className={s.tabNum}>{state.txPresets.length}</span>}
+              {dt.id === 'console' && state.consoleLog.length > 0 && (
                 <span className={s.tabNum}>{Math.min(state.consoleLog.length, 99)}</span>
               )}
             </button>
@@ -93,7 +95,7 @@ export function TransmitDock() {
         <div className={s.dockActions}>
           <button
             className={s.iconBtn}
-            title="닫기"
+            title={t('dock.close')}
             onClick={() => dispatch({ type: 'SET_DOCK_OPEN', open: false })}
           >
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.3">
@@ -117,7 +119,7 @@ export function TransmitDock() {
                     className={`${s.runBtn} ${p.active ? s.runBtnActive : ''}`}
                     onClick={e => { e.stopPropagation(); runPreset(p); }}
                     disabled={!connected}
-                    title="전송"
+                    title={t('dock.send')}
                   >▶</button>
                   <div className={s.txInfo}>
                     <div className={s.txName}>{p.name}</div>
@@ -126,7 +128,7 @@ export function TransmitDock() {
                   <div className={s.txRight}>
                     <span className={s.txMode}>
                       {p.mode === 'repeat'  ? `${p.interval_ms}ms` :
-                       p.mode === 'trigger' ? '트리거' : '단발'}
+                       p.mode === 'trigger' ? t('dock.trigger') : t('dock.single')}
                     </span>
                     <button
                       className={s.removeBtn}
@@ -135,7 +137,7 @@ export function TransmitDock() {
                         dispatch({ type: 'REMOVE_TX_PRESET', id: p.id });
                         if (selectedPreset === p.id) setSelectedPreset(null);
                       }}
-                      title="삭제"
+                      title={t('dock.delete')}
                     >×</button>
                   </div>
                 </div>
@@ -145,16 +147,16 @@ export function TransmitDock() {
                 <div className={s.addPresetForm}>
                   <input className={s.addInp} value={newPresetName}
                     onChange={e => setNewPresetName(e.target.value)}
-                    placeholder="이름" autoFocus />
+                    placeholder={t('dock.presetName')} autoFocus />
                   <input className={s.addInp} value={newPresetBytes}
                     onChange={e => setNewPresetBytes(e.target.value)}
-                    placeholder="HEX 바이트 (예: 68 01 00 16)" spellCheck={false} />
+                    placeholder={t('dock.presetBytes')} spellCheck={false} />
                   <div className={s.addRow}>
                     <select className={s.addSel} value={newPresetMode}
                       onChange={e => setNewPresetMode(e.target.value as TxPreset['mode'])}>
-                      <option value="single">단발</option>
-                      <option value="repeat">반복</option>
-                      <option value="trigger">트리거</option>
+                      <option value="single">{t('dock.single')}</option>
+                      <option value="repeat">{t('dock.repeat')}</option>
+                      <option value="trigger">{t('dock.trigger')}</option>
                     </select>
                     {newPresetMode === 'repeat' && (
                       <>
@@ -165,15 +167,15 @@ export function TransmitDock() {
                     )}
                   </div>
                   <div className={s.addBtns}>
-                    <button className={s.addSaveBtn} onClick={addPreset}>저장</button>
-                    <button className={s.addCancelBtn} onClick={() => setAddingPreset(false)}>취소</button>
+                    <button className={s.addSaveBtn} onClick={addPreset}>{t('dock.save')}</button>
+                    <button className={s.addCancelBtn} onClick={() => setAddingPreset(false)}>{t('dock.cancel')}</button>
                   </div>
                 </div>
               ) : (
                 <div className={s.txItem}
                   style={{ color: 'var(--brand)', justifyContent: 'center', gap: 6, cursor: 'pointer' }}
                   onClick={() => setAddingPreset(true)}>
-                  <span>+</span> 새 프리셋
+                  <span>+</span> {t('dock.newPreset')}
                 </div>
               )}
             </div>
@@ -212,15 +214,16 @@ function QuickSend({ value, onChange, onSend, onErrorClear, error, disabled }: {
   value: string; onChange: (v: string) => void;
   onSend: () => void; onErrorClear: () => void; error: string; disabled: boolean;
 }) {
+  const t = useT();
   return (
     <div className={s.quickSend}>
-      <div className={s.label}>빠른 전송</div>
+      <div className={s.label}>{t('dock.quickSend')}</div>
       <textarea
         className={s.hexInput}
         value={value}
         onChange={e => onChange(e.target.value)}
         onKeyDown={e => e.ctrlKey && e.key === 'Enter' && onSend()}
-        placeholder="HEX 바이트를 입력하세요 (예: 68 01 00 16)"
+        placeholder={t('dock.hexPlaceholder')}
         rows={3}
         disabled={disabled}
       />
@@ -235,10 +238,10 @@ function QuickSend({ value, onChange, onSend, onErrorClear, error, disabled }: {
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
             <path d="M2 2l8 4-8 4V7l5-1-5-1V2z"/>
           </svg>
-          전송
+          {t('dock.send')}
           <kbd className={s.sendKbd}>Ctrl+↵</kbd>
         </button>
-        <span className={s.txHint}>{disabled ? '장치에 연결되지 않음' : 'Ctrl+Enter로 전송'}</span>
+        <span className={s.txHint}>{disabled ? t('dock.notConnected') : t('dock.sendHint')}</span>
       </div>
     </div>
   );
@@ -247,6 +250,7 @@ function QuickSend({ value, onChange, onSend, onErrorClear, error, disabled }: {
 function PresetEditor({ preset, onUpdate, onRun, connected }: {
   preset: TxPreset; onUpdate: (p: TxPreset) => void; onRun: () => void; connected: boolean;
 }) {
+  const t = useT();
   return (
     <div className={s.presetEditor}>
       <div className={s.presetEditorHead}>
@@ -255,22 +259,22 @@ function PresetEditor({ preset, onUpdate, onRun, connected }: {
           value={preset.name}
           onChange={e => onUpdate({ ...preset, name: e.target.value })}
         />
-        <button className={s.sendBtn} onClick={onRun} disabled={!connected} style={{ marginLeft: 'auto' }}>▶ 전송</button>
+        <button className={s.sendBtn} onClick={onRun} disabled={!connected} style={{ marginLeft: 'auto' }}>▶ {t('dock.send')}</button>
       </div>
       <textarea
         className={s.hexInput}
         value={preset.bytes}
         onChange={e => onUpdate({ ...preset, bytes: e.target.value })}
         rows={3}
-        placeholder="HEX 바이트"
+        placeholder={t('dock.hexBytes')}
         spellCheck={false}
       />
       <div className={s.presetModeRow}>
         <select className={s.addSel} value={preset.mode}
           onChange={e => onUpdate({ ...preset, mode: e.target.value as TxPreset['mode'] })}>
-          <option value="single">단발</option>
-          <option value="repeat">반복</option>
-          <option value="trigger">트리거</option>
+          <option value="single">{t('dock.single')}</option>
+          <option value="repeat">{t('dock.repeat')}</option>
+          <option value="trigger">{t('dock.trigger')}</option>
         </select>
         {preset.mode === 'repeat' && (
           <>
@@ -282,7 +286,7 @@ function PresetEditor({ preset, onUpdate, onRun, connected }: {
         {preset.mode === 'trigger' && (
           <input className={s.addInp} value={preset.trigger ?? ''}
             onChange={e => onUpdate({ ...preset, trigger: e.target.value })}
-            placeholder="트리거 패턴 (예: contains:68 01)" />
+            placeholder={t('dock.triggerPattern')} />
         )}
       </div>
     </div>
@@ -313,7 +317,7 @@ async function runScript(
     } else if (line.startsWith('log ')) {
       onLog(line.slice(4).trim(), 'info');
     } else if (line !== '') {
-      onLog(`알 수 없는 명령: ${line}`, 'err');
+      onLog(`Unknown command: ${line}`, 'err');
     }
   }
 }
@@ -322,8 +326,10 @@ function ScriptTab({ activeId, connected, dispatch }: {
   activeId: string | null; connected: boolean;
   dispatch: React.Dispatch<any>;
 }) {
+  const t = useT();
+  const defaultComment = '# Commands: send HEX | sleep MS | log message\n';
   const [code, setCode] = useState(() => {
-    try { return localStorage.getItem('ws_script') ?? '# 명령어: send HEX | sleep MS | log 메시지\n'; } catch { return '# 명령어: send HEX | sleep MS | log 메시지\n'; }
+    try { return localStorage.getItem('ws_script') ?? defaultComment; } catch { return defaultComment; }
   });
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState('');
@@ -334,7 +340,7 @@ function ScriptTab({ activeId, connected, dispatch }: {
 
   async function run() {
     if (!connected || !activeId) {
-      setOutput('오류: 장치에 연결되지 않음');
+      setOutput(t('dock.scriptError'));
       return;
     }
     setRunning(true);
@@ -346,10 +352,10 @@ function ScriptTab({ activeId, connected, dispatch }: {
     };
     try {
       await runScript(code, activeId, log);
-      lines.push('✓ 스크립트 완료');
+      lines.push(t('dock.scriptDone'));
       setOutput(lines.join('\n'));
     } catch (e: any) {
-      lines.push(`오류: ${e.message}`);
+      lines.push(`${t('dock.scriptExecError')}${e.message}`);
       setOutput(lines.join('\n'));
     }
     setRunning(false);
@@ -358,11 +364,11 @@ function ScriptTab({ activeId, connected, dispatch }: {
   return (
     <div className={s.scriptTab}>
       <div className={s.scriptHead}>
-        <span className={s.scriptTitle}>스크립트 편집기</span>
-        <span className={s.scriptHint}>send HEX · sleep MS · log 메시지</span>
+        <span className={s.scriptTitle}>{t('dock.scriptTitle')}</span>
+        <span className={s.scriptHint}>{t('dock.scriptHint')}</span>
         <button className={`${s.runScriptBtn} ${running ? s.runScriptRunning : ''}`}
           onClick={run} disabled={running || !connected}>
-          {running ? '실행 중…' : '▶ 실행'}
+          {running ? t('dock.running') : t('dock.run')}
         </button>
       </div>
       <textarea
@@ -378,6 +384,7 @@ function ScriptTab({ activeId, connected, dispatch }: {
 
 function ConsoleTab() {
   const { state, dispatch } = useApp();
+  const t = useT();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -387,8 +394,8 @@ function ConsoleTab() {
   return (
     <div className={s.consoleTab}>
       <div className={s.consoleHead}>
-        <span className={s.consoleTitle}>콘솔 로그</span>
-        <button className={s.consoleClear} onClick={() => dispatch({ type: 'CLEAR_CONSOLE' })}>지우기</button>
+        <span className={s.consoleTitle}>{t('dock.consoleTitle')}</span>
+        <button className={s.consoleClear} onClick={() => dispatch({ type: 'CLEAR_CONSOLE' })}>{t('dock.consoleClear')}</button>
       </div>
       <div className={s.consoleBody}>
         {state.consoleLog.map((entry, i) => (
@@ -407,6 +414,7 @@ function MacroTab({ activeId, connected, dispatch }: {
   activeId: string | null; connected: boolean;
   dispatch: React.Dispatch<any>;
 }) {
+  const t = useT();
   const [macros, setMacros] = useState<Record<string, string>>(() => {
     try { const v = localStorage.getItem('ws_macros'); return v ? JSON.parse(v) : {}; } catch { return {}; }
   });
@@ -420,7 +428,7 @@ function MacroTab({ activeId, connected, dispatch }: {
       if (MACRO_KEYS.includes(key) && macros[key]) {
         e.preventDefault();
         api.sendBytes(macros[key], activeId).then(() => {
-          dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `매크로 ${key}: ${macros[key]}`, kind: 'tx' } });
+          dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('dock.macroLog')}${key}: ${macros[key]}`, kind: 'tx' } });
         });
       }
     }
@@ -444,13 +452,13 @@ function MacroTab({ activeId, connected, dispatch }: {
   function fireMacro(key: string) {
     if (!connected || !activeId || !macros[key]) return;
     api.sendBytes(macros[key], activeId).then(() => {
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `매크로 ${key}: ${macros[key]}`, kind: 'tx' } });
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('dock.macroLog')}${key}: ${macros[key]}`, kind: 'tx' } });
     });
   }
 
   return (
     <div className={s.macroTab}>
-      <div className={s.macroHint}>{connected ? 'F1–F12 키로 즉시 전송' : '연결 후 사용 가능'}</div>
+      <div className={s.macroHint}>{connected ? t('dock.macroHintOn') : t('dock.macroHintOff')}</div>
       <div className={s.macroList}>
         {MACRO_KEYS.map(key => (
           <div key={key} className={`${s.macroItem} ${!macros[key] ? s.macroEmpty : ''}`}>
@@ -462,12 +470,12 @@ function MacroTab({ activeId, connected, dispatch }: {
                 onChange={e => setEditVal(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') saveMacro(); if (e.key === 'Escape') setEditing(null); }}
                 autoFocus
-                placeholder="HEX 바이트"
+                placeholder={t('dock.hexBytes')}
                 spellCheck={false}
               />
             ) : (
               <span className={s.macroBytes} onClick={() => startEdit(key)}>
-                {macros[key] ?? <span className={s.macroNone}>— 클릭하여 설정</span>}
+                {macros[key] ?? <span className={s.macroNone}>{t('dock.macroClickToSet')}</span>}
               </span>
             )}
             <div className={s.macroActions}>
@@ -478,7 +486,7 @@ function MacroTab({ activeId, connected, dispatch }: {
                 </>
               ) : (
                 <>
-                  <button className={s.macroEdit} onClick={() => startEdit(key)}>편집</button>
+                  <button className={s.macroEdit} onClick={() => startEdit(key)}>{t('dock.macroEdit')}</button>
                   {macros[key] && (
                     <>
                       <button className={s.macroClear} onClick={() => clearMacro(key)}>×</button>

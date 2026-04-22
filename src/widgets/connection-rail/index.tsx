@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import s from './Rail.module.css';
 import { useApp } from '../../app/store';
+import { useT } from '../../shared/lib/i18n';
 import { formatSize } from '../../shared/lib/format';
 import type { SavedFilter } from '../../shared/types';
 
@@ -33,6 +34,7 @@ const SendIcon = () => (
 export function ConnectionRail() {
   const { state, dispatch } = useApp();
   const { sessions, activeSessionId, screen, filter, savedFilters, txPresets, bufferBytes } = state;
+  const t = useT();
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const totalPackets = state.packets.length;
   const [addingFilter, setAddingFilter] = useState(false);
@@ -61,22 +63,22 @@ export function ConnectionRail() {
       {/* Connections section */}
       <div className={s.section}>
         <div className={s.sectionHead}>
-          연결 목록
+          {t('rail.connections')}
           <button
             className={s.addBtn}
             onClick={() => dispatch({ type: 'SET_SCREEN', screen: 'connect' })}
-            title="새 연결 추가"
+            title={t('rail.addConn')}
           >+</button>
         </div>
 
         {sessions.length === 0 ? (
           <div className={s.empty}>
-            <div>연결된 장치 없음</div>
+            <div>{t('rail.noDevices')}</div>
             <button
               className={s.emptyBtn}
               onClick={() => dispatch({ type: 'SET_SCREEN', screen: 'connect' })}
             >
-              + 새 연결
+              {t('rail.newConn')}
             </button>
           </div>
         ) : sessions.map(sess => (
@@ -90,12 +92,12 @@ export function ConnectionRail() {
               <div className={s.connName}>{sess.name}</div>
               <div className={s.connSub}>
                 {sess.port_params ?? sess.kind.toUpperCase()}
-                {!sess.connected && ' · 연결 해제됨'}
+                {!sess.connected && ` · ${t('rail.disconnected')}`}
               </div>
             </div>
             {sess.connected && (
               <div className={s.connRate}>
-                <b>{sess.rx_bytes > 0 ? (sess.rx_bytes / 1024).toFixed(0) : '0'}</b>/초<br/>수신
+                <b>{sess.rx_bytes > 0 ? (sess.rx_bytes / 1024).toFixed(0) : '0'}</b>{t('rail.rateUnit')}<br/>{t('rail.receiveRate')}
               </div>
             )}
           </div>
@@ -109,33 +111,33 @@ export function ConnectionRail() {
           <div className={s.subnav}>
             <NavItem
               icon={<MonitorIcon />}
-              label="실시간 모니터"
+              label={t('rail.liveMonitor')}
               count={totalPackets}
               active={screen === 'workspace'}
               onClick={() => dispatch({ type: 'SET_SCREEN', screen: 'workspace' })}
             />
             <NavItem
               icon={<SplitIcon />}
-              label="패킷 분리"
+              label={t('rail.splitter')}
               count={state.splitter.sof.length > 0 ? state.splitter.sof.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ') : undefined}
               active={screen === 'splitter'}
               onClick={() => dispatch({ type: 'SET_SCREEN', screen: 'splitter' })}
             />
             <NavItem
               icon={<AnalyzeIcon />}
-              label="분석"
+              label={t('rail.analyzer')}
               active={screen === 'analyzer'}
               onClick={() => dispatch({ type: 'SET_SCREEN', screen: 'analyzer' })}
             />
             <NavItem
               icon={<CheckIcon />}
-              label="체크섬"
+              label={t('rail.checksum')}
               active={screen === 'checksum'}
               onClick={() => dispatch({ type: 'SET_SCREEN', screen: 'checksum' })}
             />
             <NavItem
               icon={<SendIcon />}
-              label="전송"
+              label={t('rail.transmit')}
               count={txPresets.length}
               active={false}
               onClick={() => dispatch({ type: 'SET_DOCK_OPEN', open: true })}
@@ -146,7 +148,7 @@ export function ConnectionRail() {
 
       {/* Saved filters */}
       <div className={s.section}>
-        <div className={s.sectionHead}>저장된 필터</div>
+        <div className={s.sectionHead}>{t('rail.savedFilters')}</div>
         <div className={s.subnav}>
           {savedFilters.map(f => (
             <div
@@ -164,7 +166,7 @@ export function ConnectionRail() {
               <button
                 className={s.filterRemove}
                 onClick={e => { e.stopPropagation(); dispatch({ type: 'REMOVE_SAVED_FILTER', id: f.id }); }}
-                title="필터 삭제"
+                title={t('rail.deleteFilter')}
               >×</button>
             </div>
           ))}
@@ -174,19 +176,19 @@ export function ConnectionRail() {
                 className={s.filterInp}
                 value={newFilterLabel}
                 onChange={e => setNewFilterLabel(e.target.value)}
-                placeholder="이름"
+                placeholder={t('rail.filterName')}
                 autoFocus
               />
               <input
                 className={s.filterInp}
                 value={newFilterQuery}
                 onChange={e => setNewFilterQuery(e.target.value)}
-                placeholder="쿼리 (예: starts:68 01)"
+                placeholder={t('rail.filterQuery')}
                 onKeyDown={e => { if (e.key === 'Enter') saveNewFilter(); if (e.key === 'Escape') setAddingFilter(false); }}
               />
               <div className={s.filterFormBtns}>
-                <button className={s.filterSaveBtn} onClick={saveNewFilter}>저장</button>
-                <button className={s.filterCancelBtn} onClick={() => setAddingFilter(false)}>취소</button>
+                <button className={s.filterSaveBtn} onClick={saveNewFilter}>{t('rail.save')}</button>
+                <button className={s.filterCancelBtn} onClick={() => setAddingFilter(false)}>{t('rail.cancel')}</button>
               </div>
             </div>
           ) : (
@@ -195,7 +197,7 @@ export function ConnectionRail() {
               style={{ color: 'var(--brand)' }}
               onClick={() => setAddingFilter(true)}
             >
-              + 새 필터
+              {t('rail.addFilter')}
             </div>
           )}
         </div>
@@ -208,7 +210,7 @@ export function ConnectionRail() {
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4">
           <circle cx="6" cy="6" r="4.5"/><path d="M6 3.5v3l1.5 1"/>
         </svg>
-        버퍼 · {formatSize(bufferBytes)} / {bufferMaxKb} MB
+        {t('rail.buffer')} · {formatSize(bufferBytes)} / {bufferMaxKb} MB
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 [package]
 name = "wirescope"
-version = "0.1.0"
+version = "0.1.1"
 description = "WireScope"
 authors = ["lunDreame"]
 edition = "2021"

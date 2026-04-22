@@ -110,4 +110,5 @@ export interface AppSettings {
   showGapRows: boolean;
   accentHue:  number;
   autoScroll: boolean;
+  language:  'ko' | 'en';
 }

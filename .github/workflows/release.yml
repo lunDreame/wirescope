@@ -78,10 +78,10 @@ jobs:
           tagName: v__VERSION__
           releaseName: WireScope v__VERSION__
           releaseBody: |
-            ## 다운로드
+            ## Downloads
 
-            | 플랫폼 | 파일 |
-            |--------|------|
+            | Platform | File |
+            |----------|------|
             | macOS (Apple Silicon) | WireScope_*_aarch64.dmg |
             | macOS (Intel)         | WireScope_*_x64.dmg     |
             | Windows               | WireScope_*_x64-setup.exe |

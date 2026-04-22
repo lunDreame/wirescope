@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import s from './Toolbar.module.css';
 import { useApp } from '../../app/store';
+import { useT } from '../../shared/lib/i18n';
 import type { ByteFormat } from '../../shared/types';
 import { SettingsPanel } from '../../features/configure-splitter/SettingsPanel';
 
@@ -15,6 +16,7 @@ interface Props {
 export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, connected }: Props) {
   const { state, dispatch } = useApp();
   const { settings, filter } = state;
+  const t = useT();
   const [showSettings, setShowSettings] = useState(false);
 
   const fmtOptions: { value: ByteFormat; label: string }[] = [
@@ -31,12 +33,12 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
         className={`${s.tg} ${isReceiving && connected ? s.primary : ''}`}
         onClick={onToggleReceive}
         disabled={!connected}
-        title={!connected ? '연결된 세션이 없습니다' : undefined}
+        title={!connected ? t('toolbar.noSession') : undefined}
       >
         {isReceiving && connected ? (
           <>
             <span className={s.pulse} />
-            수신 중
+            {t('toolbar.receiving')}
             <kbd className={s.kbd}>⌘R</kbd>
           </>
         ) : (
@@ -44,7 +46,7 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
             <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
               <path d="M3 3l6 3-6 3V3z"/>
             </svg>
-            수신 시작
+            {t('toolbar.start')}
           </>
         )}
       </button>
@@ -54,7 +56,7 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
             <rect x="2" y="2" width="3" height="8"/><rect x="7" y="2" width="3" height="8"/>
           </svg>
-          일시정지
+          {t('toolbar.pause')}
         </button>
       )}
 
@@ -78,7 +80,7 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
           className={filter.errorsOnly ? s.on : ''}
           onClick={() => dispatch({ type: 'SET_FILTER', filter: { errorsOnly: !filter.errorsOnly } })}
         >
-          오류만
+          {t('toolbar.errorsOnly')}
         </button>
       </div>
 
@@ -102,7 +104,7 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M2 2h4v4H2zM6 6h4v4H6z"/>
         </svg>
-        패킷 분리
+        {t('toolbar.splitter')}
         <span className={s.hint}>
           {state.splitter.method === 'delimiter'
             ? `${state.splitter.sof.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ')} / ${state.splitter.eof.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ')}`
@@ -115,7 +117,7 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M2 12L6 5l3 4 3-8"/>
         </svg>
-        타이밍 분석
+        {t('toolbar.analyzer')}
       </button>
 
       <div style={{ flex: 1 }} />
@@ -125,20 +127,20 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M2 3h8M4 3V2h4v1M5 5v4M7 5v4M3 3l.5 7h5l.5-7"/>
         </svg>
-        지우기
+        {t('toolbar.clear')}
       </button>
       <button className={s.tg} onClick={onExport}>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M6 2v6M3 6l3 3 3-3M2 10h8"/>
         </svg>
-        내보내기
+        {t('toolbar.export')}
       </button>
       <button
         className={`${s.tg} ${showSettings ? s.on : ''}`}
         onMouseDown={e => e.stopPropagation()}
         onClick={() => setShowSettings(v => !v)}
       >
-        빠른 설정
+        {t('toolbar.settings')}
       </button>
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}

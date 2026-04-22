@@ -1,16 +1,16 @@
 # WireScope
 
-시리얼/소켓 통신 모니터
+Serial/Socket Communication Monitor
 
-## 다운로드
-[릴리즈](https://github.com/lunDreame/wirescope/releases)
+## Download
+[Releases](https://github.com/lunDreame/wirescope/releases)
 
-## 주요 기능
+## Key Features
 
-- 작업 화면
-- 패킷 분리
-- 체크섬 계산
-- 패킷 분석
+- Work screen
+- Packet splitting
+- Checksum calculation
+- Packet analysis
 
 ![task-screen](./docs/images/task-screen.png)
 ![connect](./docs/images/connect.png)

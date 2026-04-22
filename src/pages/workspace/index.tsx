@@ -9,6 +9,7 @@ import { TransmitDock } from '../../widgets/transmit-dock';
 import { MainToolbar } from '../../widgets/main-toolbar';
 import { StatusBar, StatusChip, StatusSep } from '../../shared/ui/StatusBar';
 import { useApp, useActiveSession } from '../../app/store';
+import { useT } from '../../shared/lib/i18n';
 import * as api from '../../shared/api/tauri';
 import { formatSize } from '../../shared/lib/format';
 
@@ -16,6 +17,7 @@ export function WorkspacePage() {
   const { state, dispatch } = useApp();
   const activeSession = useActiveSession();
   const isReceiving = state.isReceiving;
+  const t = useT();
 
   const connected = state.sessions.some(s => s.connected);
 
@@ -23,9 +25,9 @@ export function WorkspacePage() {
     dispatch({ type: 'SET_RECEIVING', on: !isReceiving });
     dispatch({
       type: 'LOG_CONSOLE',
-      entry: { ts: Date.now(), text: isReceiving ? '수신 일시정지됨' : '수신 재개됨', kind: 'info' },
+      entry: { ts: Date.now(), text: isReceiving ? t('ws.pausedLog') : t('ws.resumedLog'), kind: 'info' },
     });
-  }, [isReceiving, dispatch]);
+  }, [isReceiving, dispatch, t]);
 
   const handleClear = useCallback(async () => {
     await api.clearPackets();
@@ -52,9 +54,9 @@ export function WorkspacePage() {
     if (state.packets.length === 0) return;
     try {
       const path = await api.exportPackets(JSON.stringify(state.packets, null, 2));
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `내보내기 완료 → ${path}`, kind: 'info' } });
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('ws.exportDone')}${path}`, kind: 'info' } });
     } catch (e: any) {
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `내보내기 실패: ${e}`, kind: 'err' } });
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('ws.exportFailed')}${e}`, kind: 'err' } });
     }
   }
 
@@ -90,16 +92,16 @@ export function WorkspacePage() {
           <>
             <StatusChip dot={connected ? 'var(--ok)' : 'var(--ink-dim)'}>
               {connected
-                ? `${activeSession?.name ?? '연결됨'} · 수신 중`
-                : '연결된 장치 없음'}
+                ? `${activeSession?.name ?? 'WireScope'}${t('ws.receiving')}`
+                : t('ws.noDevice')}
             </StatusChip>
             <StatusSep />
-            <span>{state.packets.length.toLocaleString()}개 패킷</span>
+            <span>{state.packets.length.toLocaleString()}{t('ws.packets')}</span>
           </>
         }
         right={
           <>
-            <span>버퍼 {formatSize(state.bufferBytes)} / 64 MB</span>
+            <span>{t('ws.buffer')}{formatSize(state.bufferBytes)} / 64 MB</span>
             <StatusSep />
             <button
               style={{
@@ -113,7 +115,7 @@ export function WorkspacePage() {
               }}
               onClick={() => dispatch({ type: 'SET_DOCK_OPEN', open: !state.dockOpen })}
             >
-              {state.dockOpen ? '전송 닫기' : '전송 열기'}
+              {state.dockOpen ? t('ws.transmitClose') : t('ws.transmitOpen')}
             </button>
           </>
         }

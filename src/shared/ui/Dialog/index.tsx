@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import s from './Dialog.module.css';
+import { useT } from '../../lib/i18n';
 
 interface Props {
   open:     boolean;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function Dialog({ open, onClose, title, subtitle, children, footer, width = 820 }: Props) {
+  const t = useT();
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -29,7 +31,7 @@ export function Dialog({ open, onClose, title, subtitle, children, footer, width
             <h2 className={s.title}>{title}</h2>
             {subtitle && <div className={s.subtitle}>{subtitle}</div>}
           </div>
-          <button className={s.close} onClick={onClose} title="닫기 (Esc)">
+          <button className={s.close} onClick={onClose} title={t('dialog.close')}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M1 1l12 12M13 1L1 13"/>
             </svg>
