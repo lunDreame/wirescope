@@ -125,3 +125,15 @@
   background: var(--tx);
   display: inline-block;
 }
+
+/* Update available badge on settings button */
+.updateDot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+  border: 1px solid var(--surface);
+}

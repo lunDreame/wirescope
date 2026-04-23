@@ -9,7 +9,7 @@
 /* Header */
 .head {
   display: grid;
-  grid-template-columns: 28px 90px 34px 110px 1fr 60px 70px;
+  grid-template-columns: minmax(44px, max-content) 90px 34px 110px 1fr 60px 70px;
   background: var(--panel-2);
   border-bottom: 1px solid var(--line);
   font-size: 10.5px;
@@ -53,7 +53,7 @@
 /* Row */
 .row {
   display: grid;
-  grid-template-columns: 28px 90px 34px 110px 1fr 60px 70px;
+  grid-template-columns: minmax(44px, max-content) 90px 34px 110px 1fr 60px 70px;
   height: var(--row-h, 26px);
   font-family: var(--mono);
   font-size: 12px;
@@ -62,11 +62,11 @@
   transition: background 0.06s;
 }
 
-.row:hover { background: oklch(0.98 0.01 95); }
+.row:hover { background: var(--hover); }
 .row.sel   { background: var(--selected); }
 .row.sel + .row { border-top-color: oklch(0.82 0.08 245); }
-.row.rowErr { background: oklch(0.985 0.01 25); }
-.row.rowErr.sel { background: oklch(0.93 0.05 25); }
+.row.rowErr { background: var(--row-err-bg); }
+.row.rowErr.sel { background: var(--row-err-sel); }
 
 /* Direction stripe */
 .row.tx td:first-child,
@@ -107,8 +107,11 @@
 /* Bytes display */
 .bytes { display: flex; align-items: center; gap: 0 4px; flex-wrap: nowrap; }
 .hexPlain  { color: var(--ink); }
-.hexSync   { color: oklch(0.42 0.12 245); font-weight: 600; }
-.hexBad    { color: var(--err); font-weight: 600; text-decoration: underline wavy oklch(0.65 0.15 25); text-underline-offset: 2px; }
+.hexSync   { color: var(--hex-marker); font-weight: 600; }
+.hexSof    { color: var(--brand);  font-weight: 700; }
+.hexEof    { color: var(--tx);     font-weight: 700; }
+.hexCs     { color: var(--warn);   font-weight: 700; }
+.hexBad    { color: var(--err); font-weight: 600; text-decoration: underline wavy var(--wavy-err); text-underline-offset: 2px; }
 
 /* Gap spacer row */
 .gapRow {

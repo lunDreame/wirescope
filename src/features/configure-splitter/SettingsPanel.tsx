@@ -1,9 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import s from './SettingsPanel.module.css';
 import { useApp } from '../../app/store';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
 import { useT } from '../../shared/lib/i18n';
+import { useUpdate, type UpdateInfo } from '../../shared/lib/update-context';
 import type { AppSettings } from '../../shared/types';
+
+type UpdateState =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'upToDate' }
+  | { kind: 'available'; info: UpdateInfo }
+  | { kind: 'installing' }
+  | { kind: 'error'; msg: string };
 
 interface Props {
   onClose: () => void;
@@ -14,6 +24,12 @@ export function SettingsPanel({ onClose }: Props) {
   const { settings } = state;
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
+  const { pendingUpdate, clearUpdate } = useUpdate();
+
+  // If the context already has an update (auto-detected on startup), show it immediately
+  const [upd, setUpd] = useState<UpdateState>(() =>
+    pendingUpdate ? { kind: 'available', info: pendingUpdate } : { kind: 'idle' }
+  );
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -25,6 +41,34 @@ export function SettingsPanel({ onClose }: Props) {
 
   function update(s: Partial<AppSettings>) {
     dispatch({ type: 'SET_SETTINGS', settings: s });
+  }
+
+  async function checkForUpdate() {
+    setUpd({ kind: 'checking' });
+    try {
+      const info = await invoke<UpdateInfo | null>('check_update');
+      if (info) {
+        setUpd({ kind: 'available', info });
+      } else {
+        setUpd({ kind: 'upToDate' });
+        setTimeout(() => setUpd({ kind: 'idle' }), 3000);
+      }
+    } catch (e) {
+      setUpd({ kind: 'error', msg: String(e) });
+      setTimeout(() => setUpd({ kind: 'idle' }), 4000);
+    }
+  }
+
+  async function installUpdate() {
+    setUpd({ kind: 'installing' });
+    clearUpdate();
+    try {
+      await invoke('install_update');
+      // app.restart() is called from Rust — this line won't be reached
+    } catch (e) {
+      setUpd({ kind: 'error', msg: String(e) });
+      setTimeout(() => setUpd({ kind: 'idle' }), 4000);
+    }
   }
 
   return (
@@ -111,6 +155,40 @@ export function SettingsPanel({ onClose }: Props) {
             />
             <span>{t('settings.autoScrollDesc')}</span>
           </label>
+        </div>
+
+        {/* ── Update section ── */}
+        <div className={s.divider} />
+        <div className={s.updateRow}>
+          {upd.kind === 'idle' && (
+            <button className={s.updateBtn} onClick={checkForUpdate}>
+              {t('update.check')}
+            </button>
+          )}
+          {upd.kind === 'checking' && (
+            <span className={s.updateStatus}>{t('update.checking')}</span>
+          )}
+          {upd.kind === 'upToDate' && (
+            <span className={`${s.updateStatus} ${s.ok}`}>{t('update.upToDate')}</span>
+          )}
+          {upd.kind === 'available' && (
+            <>
+              <span className={`${s.updateStatus} ${s.avail}`}>
+                {t('update.versionLabel')}<strong>{upd.info.version}</strong>
+              </span>
+              <button className={`${s.updateBtn} ${s.primary}`} onClick={installUpdate}>
+                {t('update.install')}
+              </button>
+            </>
+          )}
+          {upd.kind === 'installing' && (
+            <span className={s.updateStatus}>{t('update.installing')}</span>
+          )}
+          {upd.kind === 'error' && (
+            <span className={`${s.updateStatus} ${s.err}`}>
+              {t('update.error')}{upd.msg}
+            </span>
+          )}
         </div>
       </div>
     </div>

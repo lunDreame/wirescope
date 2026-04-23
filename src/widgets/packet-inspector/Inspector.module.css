@@ -125,6 +125,74 @@
 .ckOk { color: var(--ok); }
 .ckBad { color: var(--err); }
 
+/* Checksum section header with SOF exclusion toggle */
+.csumHeadRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+
+.csumExcludeRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 4px;
+}
+
+.csumExcludeRow input[type='checkbox'] {
+  cursor: pointer;
+  accent-color: var(--brand);
+  width: 11px;
+  height: 11px;
+}
+
+.csumExcludeRow:hover { color: var(--ink-2); }
+
+/* Checksum hint */
+.csHint {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.csNotConfigured {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+.csNotConfigured svg {
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+.csGoSplitter {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--brand);
+  font-size: 11px;
+  font-family: var(--mono);
+  text-align: left;
+  width: fit-content;
+}
+.csGoSplitter:hover { text-decoration: underline; }
+
 /* Checksum table */
 .csTable {
   border: 1px solid var(--line);
@@ -242,3 +310,31 @@
   color: var(--ink-3);
   margin-top: 6px;
 }
+
+/* Dump header row (label + copy button) */
+.dumpHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+
+.copyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  font-family: var(--ui);
+  transition: color 0.12s, border-color 0.12s;
+  flex-shrink: 0;
+}
+
+.copyBtn:hover { color: var(--ink); border-color: var(--brand); }
+.copyBtnOk { color: var(--ok) !important; border-color: oklch(from var(--ok) l c h / 0.4) !important; }

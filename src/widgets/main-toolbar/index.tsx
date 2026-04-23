@@ -2,6 +2,7 @@ import { useState } from 'react';
 import s from './Toolbar.module.css';
 import { useApp } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
+import { useUpdate } from '../../shared/lib/update-context';
 import type { ByteFormat } from '../../shared/types';
 import { SettingsPanel } from '../../features/configure-splitter/SettingsPanel';
 
@@ -17,6 +18,7 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
   const { state, dispatch } = useApp();
   const { settings, filter } = state;
   const t = useT();
+  const { pendingUpdate } = useUpdate();
   const [showSettings, setShowSettings] = useState(false);
 
   const fmtOptions: { value: ByteFormat; label: string }[] = [
@@ -105,11 +107,16 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
           <path d="M2 2h4v4H2zM6 6h4v4H6z"/>
         </svg>
         {t('toolbar.splitter')}
-        <span className={s.hint}>
-          {state.splitter.method === 'delimiter'
-            ? `${state.splitter.sof.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ')} / ${state.splitter.eof.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ')}`
-            : state.splitter.method}
-        </span>
+        {(() => {
+          const { method, sof, eof } = state.splitter;
+          if (method === 'delimiter') {
+            if (sof.length === 0 && eof.length === 0) return null;
+            const sofStr = sof.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+            const eofStr = eof.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+            return <span className={s.hint}>{sofStr || '?'} / {eofStr || '?'}</span>;
+          }
+          return <span className={s.hint}>{method}</span>;
+        })()}
       </button>
 
       {/* Analyzer shortcut */}
@@ -139,8 +146,12 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
         className={`${s.tg} ${showSettings ? s.on : ''}`}
         onMouseDown={e => e.stopPropagation()}
         onClick={() => setShowSettings(v => !v)}
+        style={{ position: 'relative' }}
       >
         {t('toolbar.settings')}
+        {pendingUpdate && !showSettings && (
+          <span className={s.updateDot} title={`v${pendingUpdate.version} 업데이트 가능`} />
+        )}
       </button>
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}

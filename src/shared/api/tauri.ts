@@ -57,8 +57,8 @@ export const getTimingStats = () =>
   invoke<TimingStats>('get_timing_stats');
 
 // ── Export ────────────────────────────────────────────────────
-export const exportPackets = (json: string) =>
-  invoke<string>('export_packets', { json });
+export const exportPackets = (json: string, ext = 'json') =>
+  invoke<string>('export_packets', { json, ext });
 
 // ── Events ────────────────────────────────────────────────────
 export const onPacket = (cb: (pkt: Packet) => void): Promise<UnlistenFn> =>

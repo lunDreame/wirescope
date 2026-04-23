@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import s from './Input.module.css';
 
 interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
@@ -26,6 +26,58 @@ export function Input({ mono, label, hint, error, suffix, prefix, className = ''
       {hint && !error && <span className={s.hint}>{hint}</span>}
       {error && <span className={s.error}>{error}</span>}
     </label>
+  );
+}
+
+interface NumericInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value' | 'type'> {
+  value: number;
+  onChange: (value: number) => void;
+  allowFloat?: boolean;
+  allowNegative?: boolean;
+  className?: string;
+}
+
+export function NumericInput({ value, onChange, allowFloat, allowNegative, className = '', ...rest }: NumericInputProps) {
+  const [str, setStr] = useState(String(value));
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setStr(String(value));
+  }, [value]);
+
+  const pattern = allowNegative
+    ? (allowFloat ? /^-?\d*\.?\d*$/ : /^-?\d*$/)
+    : (allowFloat ? /^\d*\.?\d*$/ : /^\d*$/);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.value;
+    if (!pattern.test(raw)) return;
+    const norm = raw.replace(/^(-?)0+(\d)/, '$1$2');
+    setStr(norm);
+    const num = norm === '' || norm === '-' || norm === '.' ? 0 : parseFloat(norm);
+    if (!isNaN(num)) onChange(num);
+  }
+
+  function handleBlur() {
+    focused.current = false;
+    // Normalize display: remove trailing dot, set empty → 0
+    const num = parseFloat(str);
+    const normalized = isNaN(num) ? 0 : num;
+    setStr(String(normalized));
+    onChange(normalized);
+  }
+
+  return (
+    <input
+      {...rest}
+      className={className}
+      type="text"
+      inputMode={allowFloat ? 'decimal' : allowNegative ? 'text' : 'numeric'}
+      value={str}
+      onFocus={e => { focused.current = true; e.target.select(); }}
+      onBlur={handleBlur}
+      onChange={handleChange}
+    />
   );
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "wirescope"
-version = "0.1.1"
+version = "0.1.2"
 description = "WireScope"
 authors = ["lunDreame"]
 edition = "2021"
@@ -32,3 +32,6 @@ parking_lot = "0.12"
 
 # Native file dialog
 tauri-plugin-dialog = "2"
+
+# OTA updates
+tauri-plugin-updater = "2"

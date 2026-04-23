@@ -12,6 +12,7 @@ export interface Packet {
 
 export interface SplitterConfig {
   method:                'delimiter' | 'length_field' | 'gap' | 'regex' | 'custom';
+  regex_pattern?:        string;  // used when method === 'regex'
   sof:                   number[];
   eof:                   number[];
   eof_include:           boolean;
@@ -24,6 +25,7 @@ export interface SplitterConfig {
   checksum_algorithm:    string;
   checksum_offset:       number;
   checksum_size:         number;
+  checksum_exclude_sof:  boolean;
   mark_errors:           boolean;
   resync_on_error:       boolean;
   discard_on_disconnect: boolean;
@@ -70,9 +72,10 @@ export interface SavedFilter {
 }
 
 export interface TxPreset {
-  id:      string;
-  name:    string;
-  bytes:   string;  // hex string
+  id:       string;
+  name:     string;
+  bytes:    string;
+  inputFmt: 'hex' | 'ascii';
   mode:    'single' | 'repeat' | 'trigger';
   interval_ms?: number;
   count?:  number;

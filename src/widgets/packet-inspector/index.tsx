@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import s from './Inspector.module.css';
-import { useApp, useSelectedPacket } from '../../app/store';
+import { useApp, useSelectedPacket, useSessionPackets } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
 import { HexDump } from '../../shared/ui/HexDump';
 import { SectionHeading } from '../../shared/ui/SectionHeading';
@@ -17,6 +17,11 @@ export function PacketInspector() {
   const activeTab = state.inspectorTab as TabId;
   const t = useT();
 
+  // Clear pin when active session changes
+  useEffect(() => {
+    setPinnedId(null);
+  }, [state.activeSessionId]);
+
   const TABS: { id: TabId; label: string }[] = [
     { id: 'detail',   label: t('inspector.detail') },
     { id: 'analysis', label: t('inspector.analysis') },
@@ -24,8 +29,9 @@ export function PacketInspector() {
     { id: 'notes',    label: t('inspector.notes') },
   ];
 
+  const sessionPackets = useSessionPackets();
   const packet = pinnedId !== null
-    ? (state.packets.find(p => p.id === pinnedId) ?? livePacket)
+    ? (sessionPackets.find(p => p.id === pinnedId) ?? livePacket)
     : livePacket;
 
   const isPinned = pinnedId !== null;
@@ -71,15 +77,52 @@ export function PacketInspector() {
 
 function DetailTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> }) {
   const [checksums, setChecksums] = useState<ChecksumResult[]>([]);
-  const { state } = useApp();
-  const { settings } = state;
+  const [copied, setCopied] = useState(false);
+  const { state, dispatch } = useApp();
+  const { settings, splitter } = state;
   const t = useT();
 
+  const copyBytes = useCallback(() => {
+    if (!packet) return;
+    let text: string;
+    switch (settings.byteFormat) {
+      case 'ascii':
+        text = packet.bytes.map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : '.').join('');
+        break;
+      case 'dec':
+        text = packet.bytes.map(b => b.toString(10)).join(' ');
+        break;
+      case 'bin':
+        text = packet.bytes.map(b => b.toString(2).padStart(8, '0')).join(' ');
+        break;
+      default: // hex
+        text = packet.bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+    }
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }, [packet, settings.byteFormat]);
+
+  const isChecksumConfigured = !!(splitter.checksum_algorithm && splitter.checksum_algorithm !== '' && splitter.checksum_algorithm !== 'none');
+
   useEffect(() => {
-    if (!packet) { setChecksums([]); return; }
-    const hex = packet.bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+    if (!packet || !isChecksumConfigured) { setChecksums([]); return; }
+
+    // Determine the byte range for checksum reference computation:
+    // - Start after SOF if checksumExcludeSof is enabled
+    // - End before the checksum field
+    const csOffset = splitter.checksum_offset;
+    const csStart = csOffset < 0 ? packet.bytes.length + csOffset : csOffset;
+    const excludeStart = splitter.checksum_exclude_sof && splitter.sof.length > 0 ? splitter.sof.length : 0;
+    const bytesToHash = (csStart > excludeStart && csStart <= packet.bytes.length)
+      ? packet.bytes.slice(excludeStart, csStart)
+      : packet.bytes;
+
+    const hex = bytesToHash.map(b => b.toString(16).padStart(2, '0')).join('');
     api.computeAllChecksums(hex).then(setChecksums).catch(() => {});
-  }, [packet?.id]);
+  }, [packet?.id, isChecksumConfigured, splitter.checksum_offset, splitter.checksum_size,
+      splitter.checksum_exclude_sof, splitter.sof.length]);
 
   if (!packet) {
     return (
@@ -111,7 +154,7 @@ function DetailTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> })
   }
 
   const csAlgo = state.splitter.checksum_algorithm;
-  if (csAlgo !== 'none' && state.splitter.checksum_size > 0) {
+  if (csAlgo && csAlgo !== 'none' && state.splitter.checksum_size > 0) {
     const csOffset = state.splitter.checksum_offset;
     const csStart = csOffset < 0
       ? packet.bytes.length + csOffset
@@ -147,36 +190,76 @@ function DetailTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> })
         </span>
       </div>
 
-      <SectionHeading>
-        { { hex: t('inspector.hex'), ascii: t('inspector.ascii'), dec: t('inspector.dec'), bin: t('inspector.bin') }[settings.byteFormat] ?? t('inspector.hex') }{t('inspector.dump')}
-      </SectionHeading>
+      <div className={s.dumpHead}>
+        <SectionHeading>
+          { { hex: t('inspector.hex'), ascii: t('inspector.ascii'), dec: t('inspector.dec'), bin: t('inspector.bin') }[settings.byteFormat] ?? t('inspector.hex') }{t('inspector.dump')}
+        </SectionHeading>
+        <button className={`${s.copyBtn} ${copied ? s.copyBtnOk : ''}`} onClick={copyBytes} title={t('inspector.copyDump')}>
+          {copied ? (
+            <>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path d="M2 5l2.5 2.5L8 2.5"/>
+              </svg>
+              {t('inspector.copied')}
+            </>
+          ) : (
+            <>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <rect x="3.5" y="1" width="5.5" height="7" rx="1"/>
+                <path d="M1 3v6a1 1 0 001 1h4.5"/>
+              </svg>
+              {t('inspector.copyDump')}
+            </>
+          )}
+        </button>
+      </div>
       <HexDump bytes={packet.bytes} highlights={highlights} format={settings.byteFormat} />
 
-      {checksums.length > 0 && (
-        <>
-          <SectionHeading>{t('inspector.csumResults')}</SectionHeading>
-          <div className={s.csTable}>
-            {checksums.map(ck => (
-              <div key={ck.algorithm} className={s.csRow}>
-                <span className={s.csAlgo}>{ck.algorithm}</span>
-                <span className={s.csHex}>0x{ck.hex}</span>
-                <span className={s.csDec}>{ck.value}</span>
-              </div>
-            ))}
-          </div>
-        </>
+      <SectionHeading>{t('inspector.csumResults')}</SectionHeading>
+      {isChecksumConfigured ? (
+        checksums.length > 0 && (
+          <>
+            <div className={s.csHint}>
+              {splitter.checksum_exclude_sof && splitter.sof.length > 0
+                ? t('inspector.csumHint')
+                : t('inspector.csumHintFull')}
+            </div>
+            <div className={s.csTable}>
+              {checksums.map(ck => (
+                <div key={ck.algorithm} className={s.csRow}>
+                  <span className={s.csAlgo}>{ck.algorithm}</span>
+                  <span className={s.csHex}>0x{ck.hex}</span>
+                  <span className={s.csDec}>{ck.value}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )
+      ) : (
+        <div className={s.csNotConfigured}>
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.3" opacity="0.5">
+            <circle cx="6.5" cy="6.5" r="5"/><path d="M6.5 4v3M6.5 8.5v.5"/>
+          </svg>
+          <span>{t('inspector.csumNotConfigured')}</span>
+          <button
+            className={s.csGoSplitter}
+            onClick={() => dispatch({ type: 'SET_SCREEN', screen: 'splitter' })}
+          >
+            {t('inspector.csumGoSplitter')} →
+          </button>
+        </div>
       )}
     </>
   );
 }
 
 function AnalysisTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> }) {
-  const { state } = useApp();
   const t = useT();
+  const sessionPackets = useSessionPackets();
   if (!packet) return <div className={s.empty}>{t('inspector.selectPacket')}</div>;
 
   // Find nearby packets for context
-  const allPackets = state.packets;
+  const allPackets = sessionPackets;
   const idx = allPackets.findIndex(p => p.id === packet.id);
   const nearby = allPackets.slice(Math.max(0, idx - 4), idx + 5);
 
@@ -193,8 +276,7 @@ function AnalysisTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> 
               {p.gap_ms !== null ? formatDelta(p.gap_ms) : '—'}
             </span>
             <span className={s.ctxBytes}>
-              {p.bytes.slice(0, 8).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')}
-              {p.bytes.length > 8 ? ' …' : ''}
+              {p.bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')}
             </span>
             <span className={s.ctxLen}>{p.bytes.length}B</span>
           </div>
@@ -230,15 +312,15 @@ function ByteHistogram({ bytes }: { bytes: number[] }) {
 }
 
 function GraphTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> }) {
-  const { state } = useApp();
   const t = useT();
+  const sessionPackets = useSessionPackets();
   if (!packet) return <div className={s.empty}>{t('inspector.selectPacket')}</div>;
 
-  const allPackets = state.packets
-    .filter(p => p.session_id === packet.session_id && p.gap_ms !== null)
+  const allPackets = sessionPackets
+    .filter(p => p.gap_ms !== null)
     .slice(-50);
 
-  if (allPackets.length === 0) return <div className={s.empty}>{t('inspector.notEnoughData')}</div>;
+  if (allPackets.length < 2) return <div className={s.empty}>{t('inspector.notEnoughData')}</div>;
 
   const gaps = allPackets.map(p => p.gap_ms!);
   const maxGap = Math.max(...gaps, 1);
@@ -281,14 +363,16 @@ function NotesTab({ packet }: { packet: ReturnType<typeof useSelectedPacket> }) 
   const { state, dispatch } = useApp();
   const t = useT();
   if (!packet) return <div className={s.empty}>{t('inspector.selectPacket')}</div>;
-  const note = state.packetNotes[packet.id] ?? '';
+  // Use session-qualified key to avoid collisions between sessions
+  const noteKey = `${packet.session_id}:${packet.id}`;
+  const note = state.packetNotes[noteKey] ?? '';
   return (
     <>
       <SectionHeading>{t('inspector.notesTitle')}</SectionHeading>
       <textarea
         className={s.noteArea}
         value={note}
-        onChange={e => dispatch({ type: 'SET_PACKET_NOTE', packetId: packet.id, note: e.target.value })}
+        onChange={e => dispatch({ type: 'SET_PACKET_NOTE', packetKey: noteKey, note: e.target.value })}
         placeholder={t('inspector.notesPlaceholder')}
         rows={6}
       />

@@ -1,0 +1,83 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 4px 0 8px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.1s, background 0.1s;
+}
+
+.card:hover {
+  border-color: var(--brand-2);
+  background: var(--hover);
+}
+
+.card.active {
+  border-color: var(--brand);
+  background: oklch(from var(--brand) l c h / 0.08);
+}
+
+.label {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+}
+
+.card.active .label {
+  color: var(--brand);
+}
+
+.desc {
+  font-size: 11px;
+  color: var(--ink-dim);
+  line-height: 1.4;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancel {
+  padding: 6px 14px;
+  border: 1.5px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cancel:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.confirm {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.1s;
+}
+
+.confirm:hover { opacity: 0.85; }
+.confirm:disabled { opacity: 0.4; cursor: not-allowed; }

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import s from './Dock.module.css';
 import { useApp } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
@@ -7,47 +8,145 @@ import type { TxPreset, DockTab } from '../../shared/types';
 
 const MACRO_KEYS = ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
 
+function asciiToHex(text: string): string {
+  const bytes: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === '\\' && i + 1 < text.length) {
+      const esc = text[i + 1];
+      if      (esc === 'r')                        { bytes.push('0d'); i += 2; }
+      else if (esc === 'n')                        { bytes.push('0a'); i += 2; }
+      else if (esc === 't')                        { bytes.push('09'); i += 2; }
+      else if (esc === '0')                        { bytes.push('00'); i += 2; }
+      else if (esc === 'x' && i + 3 < text.length) {
+        bytes.push(text.slice(i + 2, i + 4).toLowerCase()); i += 4;
+      }
+      else { bytes.push(text.charCodeAt(i).toString(16).padStart(2, '0')); i++; }
+    } else {
+      bytes.push(text.charCodeAt(i).toString(16).padStart(2, '0')); i++;
+    }
+  }
+  return bytes.join(' ');
+}
+
+function toHex(value: string, fmt: 'hex' | 'ascii'): string {
+  return fmt === 'ascii' ? asciiToHex(value) : value;
+}
+
 export function TransmitDock() {
   const { state, dispatch } = useApp();
   const t = useT();
   const [tab, setTab] = useState<DockTab>('transmit');
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [quickHex, setQuickHex] = useState('');
+  const [quickFmt, setQuickFmt] = useState<'hex' | 'ascii'>('hex');
   const [quickError, setQuickError] = useState('');
   const [addingPreset, setAddingPreset] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
   const [newPresetBytes, setNewPresetBytes] = useState('');
   const [newPresetMode, setNewPresetMode] = useState<TxPreset['mode']>('single');
   const [newPresetInterval, setNewPresetInterval] = useState(500);
+  const [newPresetCount, setNewPresetCount] = useState(0);
+  const [newPresetFmt, setNewPresetFmt] = useState<'hex' | 'ascii'>('hex');
 
-  const connected = state.sessions.some(sess => sess.connected);
+  // Only the active session's connection state matters for sending
+  const connected = state.sessions.find(s => s.id === state.activeSessionId)?.connected ?? false;
   const activeId = state.activeSessionId;
+
+  // Repeat preset timers: presetId → intervalId
+  const repeatTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  // Keep a ref to txPresets for use inside timer callbacks (avoids stale closures)
+  const txPresetsRef = useRef(state.txPresets);
+  useEffect(() => { txPresetsRef.current = state.txPresets; }, [state.txPresets]);
+
+  // Stop all repeat timers when disconnected or unmounted
+  useEffect(() => {
+    if (!connected) stopAllRepeat();
+  }, [connected]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => stopAllRepeat(), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function stopAllRepeat() {
+    Object.entries(repeatTimers.current).forEach(([id, timer]) => {
+      clearInterval(timer);
+      const preset = txPresetsRef.current.find(p => p.id === id);
+      if (preset) dispatch({ type: 'UPDATE_TX_PRESET', preset: { ...preset, active: false } });
+    });
+    repeatTimers.current = {};
+  }
+
+  function stopRepeat(presetId: string) {
+    if (repeatTimers.current[presetId]) {
+      clearInterval(repeatTimers.current[presetId]);
+      delete repeatTimers.current[presetId];
+    }
+  }
 
   async function sendQuick() {
     if (!quickHex.trim() || !activeId) return;
     setQuickError('');
+    const hex = toHex(quickHex, quickFmt);
     try {
-      await api.sendBytes(quickHex, activeId);
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `TX: ${quickHex.trim()}`, kind: 'tx' } });
+      await api.sendBytes(hex, activeId);
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `TX: ${quickHex.trim()}`, kind: 'tx', session_id: activeId ?? undefined } });
       setQuickHex('');
     } catch (e: any) {
       setQuickError(String(e));
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `Error: ${e}`, kind: 'err' } });
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `Error: ${e}`, kind: 'err', session_id: activeId ?? undefined } });
     }
   }
 
   async function runPreset(preset: TxPreset) {
     if (!activeId) return;
+
+    if (preset.mode === 'repeat') {
+      // Toggle: if already running, stop it
+      if (repeatTimers.current[preset.id]) {
+        stopRepeat(preset.id);
+        dispatch({ type: 'UPDATE_TX_PRESET', preset: { ...preset, active: false } });
+        return;
+      }
+      // Start repeat timer
+      dispatch({ type: 'UPDATE_TX_PRESET', preset: { ...preset, active: true } });
+      const hex = toHex(preset.bytes, preset.inputFmt ?? 'hex');
+      const intervalMs = Math.max(preset.interval_ms ?? 1000, 10);
+      const maxCount = preset.count ?? 0;
+      let count = 0;
+      const sendOnce = async () => {
+        if (!activeId) { stopRepeat(preset.id); dispatch({ type: 'UPDATE_TX_PRESET', preset: { ...preset, active: false } }); return; }
+        if (maxCount > 0 && count >= maxCount) {
+          stopRepeat(preset.id);
+          dispatch({ type: 'UPDATE_TX_PRESET', preset: { ...preset, active: false } });
+          return;
+        }
+        try {
+          await api.sendBytes(hex, activeId);
+          dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `TX [${preset.name}] ×${count + 1}: ${preset.bytes}`, kind: 'tx', session_id: activeId } });
+        } catch (e: any) {
+          // Session likely gone — stop the repeat automatically
+          stopRepeat(preset.id);
+          dispatch({ type: 'UPDATE_TX_PRESET', preset: { ...preset, active: false } });
+          dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `Repeat stopped [${preset.name}]: ${e}`, kind: 'err', session_id: activeId } });
+          return;
+        }
+        count++;
+      };
+      // Send first immediately then repeat
+      sendOnce();
+      repeatTimers.current[preset.id] = setInterval(sendOnce, intervalMs);
+      return;
+    }
+
+    // single / trigger: send once
     dispatch({ type: 'UPDATE_TX_PRESET', preset: { ...preset, active: true } });
+    const hex = toHex(preset.bytes, preset.inputFmt ?? 'hex');
     try {
-      await api.sendBytes(preset.bytes, activeId);
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `TX [${preset.name}]: ${preset.bytes}`, kind: 'tx' } });
+      await api.sendBytes(hex, activeId);
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `TX [${preset.name}]: ${preset.bytes}`, kind: 'tx', session_id: activeId ?? undefined } });
     } catch (e: any) {
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('dock.presetError')} [${preset.name}]: ${e}`, kind: 'err' } });
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('dock.presetError')} [${preset.name}]: ${e}`, kind: 'err', session_id: activeId ?? undefined } });
     }
-    if (preset.mode !== 'repeat') {
-      dispatch({ type: 'UPDATE_TX_PRESET', preset: { ...preset, active: false } });
-    }
+    dispatch({ type: 'UPDATE_TX_PRESET', preset: { ...preset, active: false } });
   }
 
   function addPreset() {
@@ -56,12 +155,14 @@ export function TransmitDock() {
       id: Date.now().toString(),
       name: newPresetName.trim(),
       bytes: newPresetBytes.trim(),
+      inputFmt: newPresetFmt,
       mode: newPresetMode,
       interval_ms: newPresetMode === 'repeat' ? newPresetInterval : undefined,
+      count: newPresetMode === 'repeat' && newPresetCount > 0 ? newPresetCount : undefined,
       active: false,
     };
     dispatch({ type: 'ADD_TX_PRESET', preset });
-    setNewPresetName(''); setNewPresetBytes(''); setNewPresetMode('single');
+    setNewPresetName(''); setNewPresetBytes(''); setNewPresetMode('single'); setNewPresetFmt('hex'); setNewPresetCount(0);
     setAddingPreset(false);
   }
 
@@ -86,9 +187,10 @@ export function TransmitDock() {
             >
               {dt.label}
               {dt.id === 'transmit' && <span className={s.tabNum}>{state.txPresets.length}</span>}
-              {dt.id === 'console' && state.consoleLog.length > 0 && (
-                <span className={s.tabNum}>{Math.min(state.consoleLog.length, 99)}</span>
-              )}
+              {dt.id === 'console' && (() => {
+                const n = state.consoleLog.filter(e => !e.session_id || e.session_id === state.activeSessionId).length;
+                return n > 0 ? <span className={s.tabNum}>{Math.min(n, 99)}</span> : null;
+              })()}
             </button>
           ))}
         </div>
@@ -118,9 +220,9 @@ export function TransmitDock() {
                   <button
                     className={`${s.runBtn} ${p.active ? s.runBtnActive : ''}`}
                     onClick={e => { e.stopPropagation(); runPreset(p); }}
-                    disabled={!connected}
-                    title={t('dock.send')}
-                  >▶</button>
+                    disabled={!connected && !p.active}
+                    title={p.active && p.mode === 'repeat' ? t('dock.stop') : t('dock.send')}
+                  >{p.active && p.mode === 'repeat' ? '■' : '▶'}</button>
                   <div className={s.txInfo}>
                     <div className={s.txName}>{p.name}</div>
                     <div className={s.txSub}>{p.bytes}</div>
@@ -150,7 +252,13 @@ export function TransmitDock() {
                     placeholder={t('dock.presetName')} autoFocus />
                   <input className={s.addInp} value={newPresetBytes}
                     onChange={e => setNewPresetBytes(e.target.value)}
-                    placeholder={t('dock.presetBytes')} spellCheck={false} />
+                    placeholder={newPresetFmt === 'ascii' ? t('dock.asciiPlaceholder') : t('dock.presetBytes')} spellCheck={false} />
+                  <div className={s.addRow}>
+                    <div className={s.fmtToggle}>
+                      <button className={`${s.fmtBtn} ${newPresetFmt === 'hex' ? s.fmtBtnOn : ''}`} onClick={() => setNewPresetFmt('hex')}>HEX</button>
+                      <button className={`${s.fmtBtn} ${newPresetFmt === 'ascii' ? s.fmtBtnOn : ''}`} onClick={() => setNewPresetFmt('ascii')}>ASCII</button>
+                    </div>
+                  </div>
                   <div className={s.addRow}>
                     <select className={s.addSel} value={newPresetMode}
                       onChange={e => setNewPresetMode(e.target.value as TxPreset['mode'])}>
@@ -160,9 +268,16 @@ export function TransmitDock() {
                     </select>
                     {newPresetMode === 'repeat' && (
                       <>
-                        <input className={s.addInpSm} type="number" value={newPresetInterval}
-                          onChange={e => setNewPresetInterval(Number(e.target.value))} />
+                        <input className={s.addInpSm} type="text" inputMode="numeric" value={newPresetInterval}
+                          onChange={e => { const v = e.target.value.replace(/\D/g, ''); setNewPresetInterval(v === '' ? 1 : parseInt(v, 10)); }}
+                          onFocus={e => e.target.select()} />
                         <span className={s.unit}>ms</span>
+                        <input className={s.addInpSm} type="text" inputMode="numeric" value={newPresetCount}
+                          onChange={e => { const v = e.target.value.replace(/\D/g, ''); setNewPresetCount(v === '' ? 0 : parseInt(v, 10)); }}
+                          onFocus={e => e.target.select()}
+                          title={t('dock.repeatCount')} />
+                        <span className={s.unit}>{t('dock.repeatUnit')}</span>
+                        {newPresetCount === 0 && <span className={s.infinityHint}>∞ {t('dock.infinite')}</span>}
                       </>
                     )}
                   </div>
@@ -196,6 +311,8 @@ export function TransmitDock() {
                   onErrorClear={() => setQuickError('')}
                   error={quickError}
                   disabled={!connected}
+                  fmt={quickFmt}
+                  onFmtChange={setQuickFmt}
                 />
               )}
             </div>
@@ -210,20 +327,27 @@ export function TransmitDock() {
   );
 }
 
-function QuickSend({ value, onChange, onSend, onErrorClear, error, disabled }: {
+function QuickSend({ value, onChange, onSend, onErrorClear, error, disabled, fmt, onFmtChange }: {
   value: string; onChange: (v: string) => void;
   onSend: () => void; onErrorClear: () => void; error: string; disabled: boolean;
+  fmt: 'hex' | 'ascii'; onFmtChange: (f: 'hex' | 'ascii') => void;
 }) {
   const t = useT();
   return (
     <div className={s.quickSend}>
-      <div className={s.label}>{t('dock.quickSend')}</div>
+      <div className={s.fmtRow}>
+        <div className={s.label}>{t('dock.quickSend')}</div>
+        <div className={s.fmtToggle}>
+          <button className={`${s.fmtBtn} ${fmt === 'hex' ? s.fmtBtnOn : ''}`} onClick={() => onFmtChange('hex')}>HEX</button>
+          <button className={`${s.fmtBtn} ${fmt === 'ascii' ? s.fmtBtnOn : ''}`} onClick={() => onFmtChange('ascii')}>ASCII</button>
+        </div>
+      </div>
       <textarea
         className={s.hexInput}
         value={value}
         onChange={e => onChange(e.target.value)}
         onKeyDown={e => e.ctrlKey && e.key === 'Enter' && onSend()}
-        placeholder={t('dock.hexPlaceholder')}
+        placeholder={fmt === 'ascii' ? t('dock.asciiPlaceholder') : t('dock.hexPlaceholder')}
         rows={3}
         disabled={disabled}
       />
@@ -251,6 +375,7 @@ function PresetEditor({ preset, onUpdate, onRun, connected }: {
   preset: TxPreset; onUpdate: (p: TxPreset) => void; onRun: () => void; connected: boolean;
 }) {
   const t = useT();
+  const fmt = preset.inputFmt ?? 'hex';
   return (
     <div className={s.presetEditor}>
       <div className={s.presetEditorHead}>
@@ -261,12 +386,18 @@ function PresetEditor({ preset, onUpdate, onRun, connected }: {
         />
         <button className={s.sendBtn} onClick={onRun} disabled={!connected} style={{ marginLeft: 'auto' }}>▶ {t('dock.send')}</button>
       </div>
+      <div className={s.fmtRow}>
+        <div className={s.fmtToggle}>
+          <button className={`${s.fmtBtn} ${fmt === 'hex' ? s.fmtBtnOn : ''}`} onClick={() => onUpdate({ ...preset, inputFmt: 'hex' })}>HEX</button>
+          <button className={`${s.fmtBtn} ${fmt === 'ascii' ? s.fmtBtnOn : ''}`} onClick={() => onUpdate({ ...preset, inputFmt: 'ascii' })}>ASCII</button>
+        </div>
+      </div>
       <textarea
         className={s.hexInput}
         value={preset.bytes}
         onChange={e => onUpdate({ ...preset, bytes: e.target.value })}
         rows={3}
-        placeholder={t('dock.hexBytes')}
+        placeholder={fmt === 'ascii' ? t('dock.asciiPlaceholder') : t('dock.hexBytes')}
         spellCheck={false}
       />
       <div className={s.presetModeRow}>
@@ -278,18 +409,73 @@ function PresetEditor({ preset, onUpdate, onRun, connected }: {
         </select>
         {preset.mode === 'repeat' && (
           <>
-            <input className={s.addInpSm} type="number" value={preset.interval_ms ?? 500}
-              onChange={e => onUpdate({ ...preset, interval_ms: Number(e.target.value) })} />
+            <input className={s.addInpSm} type="text" inputMode="numeric" value={preset.interval_ms ?? 500}
+              onChange={e => { const v = e.target.value.replace(/\D/g, ''); onUpdate({ ...preset, interval_ms: v === '' ? 1 : parseInt(v, 10) }); }}
+              onFocus={e => e.target.select()} />
             <span className={s.unit}>ms</span>
+            <input className={s.addInpSm} type="text" inputMode="numeric" value={preset.count ?? 0}
+              onChange={e => { const v = e.target.value.replace(/\D/g, ''); onUpdate({ ...preset, count: parseInt(v, 10) || undefined }); }}
+              onFocus={e => e.target.select()}
+              title={t('dock.repeatCount')} />
+            <span className={s.unit}>{t('dock.repeatUnit')}</span>
+            {(preset.count ?? 0) === 0 && <span className={s.infinityHint}>∞ {t('dock.infinite')}</span>}
           </>
         )}
         {preset.mode === 'trigger' && (
-          <input className={s.addInp} value={preset.trigger ?? ''}
-            onChange={e => onUpdate({ ...preset, trigger: e.target.value })}
-            placeholder={t('dock.triggerPattern')} />
+          <div className={s.triggerRow}>
+            <input className={s.addInp} style={{ flex: 1 }} value={preset.trigger ?? ''}
+              onChange={e => onUpdate({ ...preset, trigger: e.target.value })}
+              placeholder={t('dock.triggerPattern')} />
+            <TriggerHint />
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+function TriggerHint() {
+  const t = useT();
+  const btnRef = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ bottom: 0, right: 0 });
+
+  function handleEnter() {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ bottom: window.innerHeight - r.top + 8, right: window.innerWidth - r.right });
+    }
+    setOpen(true);
+  }
+
+  const ROWS = [
+    { syntax: 'starts:68 01',   desc: t('filter.starts') },
+    { syntax: 'contains:68 01', desc: t('filter.contains') },
+    { syntax: 'checksum:fail',  desc: t('filter.csumFail') },
+    { syntax: 'len:12',         desc: t('filter.lenExact') },
+    { syntax: 'len>8',          desc: t('filter.lenRange') },
+    { syntax: '!contains:68',   desc: t('filter.negate') },
+    { syntax: '68 01 00 16',    desc: t('filter.hexFree') },
+    { syntax: 'session:COM3',   desc: t('filter.session') },
+  ];
+
+  return (
+    <>
+      <span ref={btnRef} className={s.hintBtn} onMouseEnter={handleEnter} onMouseLeave={() => setOpen(false)}>?</span>
+      {open && createPortal(
+        <div className={s.hintPopPortal} style={{ bottom: pos.bottom, right: pos.right }}>
+          <div className={s.hintTitle}>{t('dock.triggerHintTitle')}</div>
+          {ROWS.map(r => (
+            <div key={r.syntax} className={s.hintRow}>
+              <code className={s.hintCode}>{r.syntax}</code>
+              <span className={s.hintDesc}>{r.desc}</span>
+            </div>
+          ))}
+          <div className={s.hintFooter}>{t('dock.triggerHintFooter')}</div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -327,9 +513,29 @@ function ScriptTab({ activeId, connected, dispatch }: {
   dispatch: React.Dispatch<any>;
 }) {
   const t = useT();
-  const defaultComment = '# Commands: send HEX | sleep MS | log message\n';
+  const defaultComment = [
+    '# 명령어: send HEX | sleep MS | log 메시지',
+    '#',
+    '# 예시:',
+    '# send AA 55 01 00        # 패킷 전송',
+    '# sleep 200               # 200ms 대기',
+    '# send AA 55 02 00        # 두 번째 패킷',
+    '# log 시퀀스 완료          # 콘솔에 메시지 출력',
+    '',
+  ].join('\n');
+
+  // Old defaults to detect and replace with new defaultComment
+  const OLD_DEFAULTS = [
+    '# Commands: send HEX | sleep MS | log message\n',
+    '# 명령어: send HEX | sleep MS | log 메시지\n',
+  ];
+
   const [code, setCode] = useState(() => {
-    try { return localStorage.getItem('ws_script') ?? defaultComment; } catch { return defaultComment; }
+    try {
+      const saved = localStorage.getItem('ws_script');
+      if (!saved || OLD_DEFAULTS.includes(saved)) return defaultComment;
+      return saved;
+    } catch { return defaultComment; }
   });
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState('');
@@ -348,7 +554,7 @@ function ScriptTab({ activeId, connected, dispatch }: {
     const log = (text: string, kind: 'tx'|'info'|'err') => {
       lines.push(text);
       setOutput(lines.join('\n'));
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text, kind } });
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text, kind, session_id: activeId ?? undefined } });
     };
     try {
       await runScript(code, activeId, log);
@@ -386,19 +592,26 @@ function ConsoleTab() {
   const { state, dispatch } = useApp();
   const t = useT();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const activeId = state.activeSessionId;
+
+  // Show entries for this session + system-wide entries (no session_id)
+  const visibleLog = state.consoleLog.filter(e =>
+    !e.session_id || e.session_id === activeId
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [state.consoleLog.length]);
+  }, [visibleLog.length]);
 
   return (
     <div className={s.consoleTab}>
       <div className={s.consoleHead}>
         <span className={s.consoleTitle}>{t('dock.consoleTitle')}</span>
-        <button className={s.consoleClear} onClick={() => dispatch({ type: 'CLEAR_CONSOLE' })}>{t('dock.consoleClear')}</button>
+        {/* Clear only this session's entries; system entries remain */}
+        <button className={s.consoleClear} onClick={() => dispatch({ type: 'CLEAR_CONSOLE', id: activeId ?? undefined })}>{t('dock.consoleClear')}</button>
       </div>
       <div className={s.consoleBody}>
-        {state.consoleLog.map((entry, i) => (
+        {visibleLog.map((entry, i) => (
           <div key={i} className={`${s.consoleLine} ${s['console_' + entry.kind]}`}>
             <span className={s.consoleTs}>{new Date(entry.ts).toTimeString().slice(0, 8)}</span>
             <span className={s.consoleText}>{entry.text}</span>
@@ -418,41 +631,59 @@ function MacroTab({ activeId, connected, dispatch }: {
   const [macros, setMacros] = useState<Record<string, string>>(() => {
     try { const v = localStorage.getItem('ws_macros'); return v ? JSON.parse(v) : {}; } catch { return {}; }
   });
+  // Per-macro format: 'hex' (default) or 'ascii'
+  const [macroFmts, setMacroFmts] = useState<Record<string, 'hex' | 'ascii'>>(() => {
+    try { const v = localStorage.getItem('ws_macro_fmts'); return v ? JSON.parse(v) : {}; } catch { return {}; }
+  });
   const [editing, setEditing] = useState<string | null>(null);
   const [editVal, setEditVal] = useState('');
+  const [editFmt, setEditFmt] = useState<'hex' | 'ascii'>('hex');
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!connected || !activeId) return;
       const key = e.key;
-      if (MACRO_KEYS.includes(key) && macros[key]) {
-        e.preventDefault();
-        api.sendBytes(macros[key], activeId).then(() => {
-          dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('dock.macroLog')}${key}: ${macros[key]}`, kind: 'tx' } });
-        });
-      }
+      if (!MACRO_KEYS.includes(key) || !macros[key]) return;
+      const tag = (document.activeElement as HTMLElement)?.tagName ?? '';
+      const editable = (document.activeElement as HTMLElement)?.isContentEditable;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || editable) return;
+      e.preventDefault();
+      fireMacro(key);
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [macros, connected, activeId, dispatch]);
+  }, [macros, macroFmts, connected, activeId, dispatch]);
 
-  function startEdit(key: string) { setEditing(key); setEditVal(macros[key] ?? ''); }
-  function saveMacros(next: Record<string, string>) {
-    setMacros(next);
-    try { localStorage.setItem('ws_macros', JSON.stringify(next)); } catch {}
+  function startEdit(key: string) {
+    setEditing(key);
+    setEditVal(macros[key] ?? '');
+    setEditFmt(macroFmts[key] ?? 'hex');
+  }
+  function saveMacros(nextBytes: Record<string, string>, nextFmts: Record<string, 'hex' | 'ascii'>) {
+    setMacros(nextBytes);
+    setMacroFmts(nextFmts);
+    try { localStorage.setItem('ws_macros', JSON.stringify(nextBytes)); } catch {}
+    try { localStorage.setItem('ws_macro_fmts', JSON.stringify(nextFmts)); } catch {}
   }
   function saveMacro() {
     if (!editing) return;
-    saveMacros({ ...macros, [editing]: editVal });
+    saveMacros(
+      { ...macros, [editing]: editVal },
+      { ...macroFmts, [editing]: editFmt },
+    );
     setEditing(null);
   }
   function clearMacro(key: string) {
-    const n = { ...macros }; delete n[key]; saveMacros(n);
+    const nb = { ...macros };  delete nb[key];
+    const nf = { ...macroFmts }; delete nf[key];
+    saveMacros(nb, nf);
   }
   function fireMacro(key: string) {
     if (!connected || !activeId || !macros[key]) return;
-    api.sendBytes(macros[key], activeId).then(() => {
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('dock.macroLog')}${key}: ${macros[key]}`, kind: 'tx' } });
+    const fmt = macroFmts[key] ?? 'hex';
+    const hex = fmt === 'ascii' ? asciiToHex(macros[key]) : macros[key];
+    api.sendBytes(hex, activeId).then(() => {
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('dock.macroLog')}${key}: ${macros[key]}`, kind: 'tx', session_id: activeId ?? undefined } });
     });
   }
 
@@ -460,44 +691,56 @@ function MacroTab({ activeId, connected, dispatch }: {
     <div className={s.macroTab}>
       <div className={s.macroHint}>{connected ? t('dock.macroHintOn') : t('dock.macroHintOff')}</div>
       <div className={s.macroList}>
-        {MACRO_KEYS.map(key => (
-          <div key={key} className={`${s.macroItem} ${!macros[key] ? s.macroEmpty : ''}`}>
-            <span className={s.macroKey}>{key}</span>
-            {editing === key ? (
-              <input
-                className={s.macroEditInp}
-                value={editVal}
-                onChange={e => setEditVal(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') saveMacro(); if (e.key === 'Escape') setEditing(null); }}
-                autoFocus
-                placeholder={t('dock.hexBytes')}
-                spellCheck={false}
-              />
-            ) : (
-              <span className={s.macroBytes} onClick={() => startEdit(key)}>
-                {macros[key] ?? <span className={s.macroNone}>{t('dock.macroClickToSet')}</span>}
-              </span>
-            )}
-            <div className={s.macroActions}>
+        {MACRO_KEYS.map(key => {
+          const fmt = macroFmts[key] ?? 'hex';
+          return (
+            <div key={key} className={`${s.macroItem} ${!macros[key] ? s.macroEmpty : ''}`}>
+              <span className={s.macroKey}>{key}</span>
               {editing === key ? (
-                <>
-                  <button className={s.macroSave} onClick={saveMacro}>✓</button>
-                  <button className={s.macroCancel} onClick={() => setEditing(null)}>✕</button>
-                </>
+                <div className={s.macroEditArea}>
+                  <div className={s.macroFmtRow}>
+                    <button className={`${s.fmtBtn} ${editFmt === 'hex' ? s.fmtBtnOn : ''}`} onClick={() => setEditFmt('hex')}>HEX</button>
+                    <button className={`${s.fmtBtn} ${editFmt === 'ascii' ? s.fmtBtnOn : ''}`} onClick={() => setEditFmt('ascii')}>ASCII</button>
+                  </div>
+                  <input
+                    className={s.macroEditInp}
+                    value={editVal}
+                    onChange={e => setEditVal(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveMacro(); if (e.key === 'Escape') setEditing(null); }}
+                    autoFocus
+                    placeholder={editFmt === 'ascii' ? t('dock.asciiPlaceholder') : t('dock.hexBytes')}
+                    spellCheck={false}
+                  />
+                </div>
               ) : (
-                <>
-                  <button className={s.macroEdit} onClick={() => startEdit(key)}>{t('dock.macroEdit')}</button>
-                  {macros[key] && (
-                    <>
-                      <button className={s.macroClear} onClick={() => clearMacro(key)}>×</button>
-                      {connected && <button className={s.macroRun} onClick={() => fireMacro(key)}>▶</button>}
-                    </>
-                  )}
-                </>
+                <span className={s.macroBytes} onClick={() => startEdit(key)}>
+                  {macros[key]
+                    ? <><span className={s.macroFmtBadge}>{fmt.toUpperCase()}</span>{macros[key]}</>
+                    : <span className={s.macroNone}>{t('dock.macroClickToSet')}</span>
+                  }
+                </span>
               )}
+              <div className={s.macroActions}>
+                {editing === key ? (
+                  <>
+                    <button className={s.macroSave} onClick={saveMacro}>✓</button>
+                    <button className={s.macroCancel} onClick={() => setEditing(null)}>✕</button>
+                  </>
+                ) : (
+                  <>
+                    <button className={s.macroEdit} onClick={() => startEdit(key)}>{t('dock.macroEdit')}</button>
+                    {macros[key] && (
+                      <>
+                        <button className={s.macroClear} onClick={() => clearMacro(key)}>×</button>
+                        {connected && <button className={s.macroRun} onClick={() => fireMacro(key)}>▶</button>}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

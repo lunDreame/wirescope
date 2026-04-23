@@ -1,4 +1,5 @@
 import { Component, ReactNode } from 'react';
+import { UpdateProvider } from '../shared/lib/update-context';
 import { useApp } from './store';
 import { getT } from '../shared/lib/i18n';
 import { SessionTitleBar } from '../widgets/session-titlebar';
@@ -13,13 +14,37 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
   static getDerivedStateFromError(e: Error) { return { error: e.message }; }
   render() {
     if (this.state.error) {
-      const lang = (() => { try { const s = localStorage.getItem('ws_settings'); return JSON.parse(s ?? '{}').language ?? 'ko'; } catch { return 'ko'; } })();
+      const settings = (() => { try { return JSON.parse(localStorage.getItem('ws_settings') ?? '{}'); } catch { return {}; } })();
+      const lang = settings.language ?? 'ko';
+      const dark = settings.theme === 'dark' || document.body.classList.contains('theme-dark');
       const t = getT(lang);
+
+      const bg   = dark ? '#0f0f0f' : '#ffffff';
+      const fg   = dark ? '#e8e8e8' : '#111111';
+      const pre  = dark ? '#ff6b6b' : '#c0392b';
+      const btn  = dark ? '#2a2a2a' : '#f0f0f0';
+      const bdr  = dark ? '#444'    : '#ccc';
+
       return (
-        <div style={{ padding: 32, fontFamily: 'monospace' }}>
-          <strong>{t('error.occurred')}</strong>
-          <pre style={{ marginTop: 12, whiteSpace: 'pre-wrap', color: 'oklch(0.55 0.18 25)' }}>{this.state.error}</pre>
-          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 16 }}>{t('error.retry')}</button>
+        <div style={{ padding: 32, fontFamily: 'monospace', background: bg, color: fg, minHeight: '100vh', boxSizing: 'border-box' }}>
+          <strong style={{ fontSize: 15 }}>{t('error.occurred')}</strong>
+          <pre style={{ marginTop: 12, whiteSpace: 'pre-wrap', color: pre, fontSize: 13 }}>{this.state.error}</pre>
+          <button
+            onClick={() => this.setState({ error: null })}
+            style={{
+              marginTop: 16,
+              padding: '6px 18px',
+              background: btn,
+              color: fg,
+              border: `1px solid ${bdr}`,
+              borderRadius: 6,
+              fontFamily: 'monospace',
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            {t('error.retry')}
+          </button>
         </div>
       );
     }
@@ -51,7 +76,9 @@ function AppInner() {
 export function App() {
   return (
     <ErrorBoundary>
-      <AppInner />
+      <UpdateProvider>
+        <AppInner />
+      </UpdateProvider>
     </ErrorBoundary>
   );
 }

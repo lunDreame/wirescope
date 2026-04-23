@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import s from './Rail.module.css';
-import { useApp } from '../../app/store';
+import { useApp, useSessionPackets } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
 import { formatSize } from '../../shared/lib/format';
 import type { SavedFilter } from '../../shared/types';
@@ -33,11 +33,17 @@ const SendIcon = () => (
 
 export function ConnectionRail() {
   const { state, dispatch } = useApp();
-  const { sessions, activeSessionId, screen, filter, savedFilters, txPresets, bufferBytes } = state;
+  const { sessions, activeSessionId, screen, filter, savedFilters, txPresets, packets } = state;
   const t = useT();
   const activeSession = sessions.find(s => s.id === activeSessionId);
-  const totalPackets = state.packets.length;
+  const totalPackets = useSessionPackets().length;  // unfiltered session packet count
   const [addingFilter, setAddingFilter] = useState(false);
+
+  // Compute RX bytes per session from live packet data (SessionInfo.rx_bytes is only set at connect time)
+  const rxBytesMap: Record<string, number> = {};
+  for (const p of packets) {
+    if (p.direction === 'RX') rxBytesMap[p.session_id] = (rxBytesMap[p.session_id] ?? 0) + p.bytes.length;
+  }
   const [newFilterLabel, setNewFilterLabel] = useState('');
   const [newFilterQuery, setNewFilterQuery] = useState('');
 
@@ -56,7 +62,11 @@ export function ConnectionRail() {
     setAddingFilter(false);
   }
 
-  const bufferMaxKb = (() => { try { return JSON.parse(localStorage.getItem('ws_serial_buffer') ?? '64'); } catch { return 64; } })();
+  const bufferMaxKb = (() => { try { return JSON.parse(localStorage.getItem('ws_serial_buffer') ?? '64') as number; } catch { return 64; } })();
+  // Per-session buffer bytes: computed from live packet data for the active session
+  const activeSessionBytes = activeSessionId
+    ? packets.filter(p => p.session_id === activeSessionId).reduce((a, p) => a + p.bytes.length, 0)
+    : 0;
 
   return (
     <div className={s.rail}>
@@ -97,7 +107,11 @@ export function ConnectionRail() {
             </div>
             {sess.connected && (
               <div className={s.connRate}>
-                <b>{sess.rx_bytes > 0 ? (sess.rx_bytes / 1024).toFixed(0) : '0'}</b>{t('rail.rateUnit')}<br/>{t('rail.receiveRate')}
+                {(() => {
+                  const rx = rxBytesMap[sess.id] ?? 0;
+                  return <><b>{rx >= 1024 ? (rx / 1024).toFixed(0) : rx}</b>{rx >= 1024 ? 'KB' : 'B'}</>;
+                })()}
+                <br/>{t('rail.receiveRate')}
               </div>
             )}
           </div>
@@ -119,7 +133,12 @@ export function ConnectionRail() {
             <NavItem
               icon={<SplitIcon />}
               label={t('rail.splitter')}
-              count={state.splitter.sof.length > 0 ? state.splitter.sof.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ') : undefined}
+              count={(() => {
+                const sof = state.splitter.sof.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+                const eof = state.splitter.eof.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+                if (sof && eof) return `${sof} / ${eof}`;
+                return sof || eof || undefined;
+              })()}
               active={screen === 'splitter'}
               onClick={() => dispatch({ type: 'SET_SCREEN', screen: 'splitter' })}
             />
@@ -210,7 +229,7 @@ export function ConnectionRail() {
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4">
           <circle cx="6" cy="6" r="4.5"/><path d="M6 3.5v3l1.5 1"/>
         </svg>
-        {t('rail.buffer')} · {formatSize(bufferBytes)} / {bufferMaxKb} MB
+        {t('rail.buffer')} · {formatSize(activeSessionBytes)} / {bufferMaxKb} KB
       </div>
     </div>
   );
