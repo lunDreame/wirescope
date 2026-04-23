@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import s from './Workspace.module.css';
 import { ConnectionRail } from '../../widgets/connection-rail';
 import { StreamStrip } from '../../widgets/packet-monitor/StreamStrip';
@@ -7,8 +7,9 @@ import { PacketTable } from '../../widgets/packet-monitor/PacketTable';
 import { PacketInspector } from '../../widgets/packet-inspector';
 import { TransmitDock } from '../../widgets/transmit-dock';
 import { MainToolbar } from '../../widgets/main-toolbar';
+import { ExportDialog } from '../../widgets/export-dialog';
 import { StatusBar, StatusChip, StatusSep } from '../../shared/ui/StatusBar';
-import { useApp, useActiveSession } from '../../app/store';
+import { useApp, useActiveSession, usePackets, useIsReceiving } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
 import * as api from '../../shared/api/tauri';
 import { formatSize } from '../../shared/lib/format';
@@ -16,23 +17,28 @@ import { formatSize } from '../../shared/lib/format';
 export function WorkspacePage() {
   const { state, dispatch } = useApp();
   const activeSession = useActiveSession();
-  const isReceiving = state.isReceiving;
+  const visiblePackets = usePackets();
+  const isReceiving = useIsReceiving();
   const t = useT();
+  const [showExport, setShowExport] = useState(false);
 
-  const connected = state.sessions.some(s => s.connected);
+  const connected = activeSession?.connected ?? false;
+  const activeId = state.activeSessionId;
 
   const toggleReceive = useCallback(() => {
-    dispatch({ type: 'SET_RECEIVING', on: !isReceiving });
+    if (!activeId) return;
+    dispatch({ type: 'SET_RECEIVING', id: activeId, on: !isReceiving });
     dispatch({
       type: 'LOG_CONSOLE',
-      entry: { ts: Date.now(), text: isReceiving ? t('ws.pausedLog') : t('ws.resumedLog'), kind: 'info' },
+      entry: { ts: Date.now(), text: isReceiving ? t('ws.pausedLog') : t('ws.resumedLog'), kind: 'info', session_id: activeId },
     });
-  }, [isReceiving, dispatch, t]);
+  }, [isReceiving, activeId, dispatch, t]);
 
   const handleClear = useCallback(async () => {
+    if (!activeId) return;
     await api.clearPackets();
-    dispatch({ type: 'CLEAR_PACKETS' });
-  }, [dispatch]);
+    dispatch({ type: 'CLEAR_PACKETS', id: activeId });
+  }, [activeId, dispatch]);
 
   // ⌘R toggle receive  ⌘K clear packets
   useEffect(() => {
@@ -50,18 +56,29 @@ export function WorkspacePage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [toggleReceive, handleClear, connected]);
 
-  async function handleExport() {
-    if (state.packets.length === 0) return;
+  function handleExport() {
+    if (visiblePackets.length === 0) return;
+    setShowExport(true);
+  }
+
+  async function doExport(content: string, ext: string) {
     try {
-      const path = await api.exportPackets(JSON.stringify(state.packets, null, 2));
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('ws.exportDone')}${path}`, kind: 'info' } });
+      const path = await api.exportPackets(content, ext);
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('ws.exportDone')}${path}`, kind: 'info', session_id: activeId ?? undefined } });
     } catch (e: any) {
-      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('ws.exportFailed')}${e}`, kind: 'err' } });
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('ws.exportFailed')}${e}`, kind: 'err', session_id: activeId ?? undefined } });
     }
   }
 
   return (
     <div className={s.workspace}>
+      <ExportDialog
+        open={showExport}
+        onClose={() => setShowExport(false)}
+        packets={visiblePackets}
+        onExport={doExport}
+      />
+
       {/* Toolbar */}
       <MainToolbar
         isReceiving={isReceiving}
@@ -90,13 +107,13 @@ export function WorkspacePage() {
       <StatusBar
         left={
           <>
-            <StatusChip dot={connected ? 'var(--ok)' : 'var(--ink-dim)'}>
+            <StatusChip dot={connected ? (isReceiving ? 'var(--ok)' : 'var(--ink-2)') : 'var(--ink-dim)'}>
               {connected
-                ? `${activeSession?.name ?? 'WireScope'}${t('ws.receiving')}`
+                ? `${activeSession?.name ?? 'WireScope'}${isReceiving ? t('ws.receiving') : t('ws.paused')}`
                 : t('ws.noDevice')}
             </StatusChip>
             <StatusSep />
-            <span>{state.packets.length.toLocaleString()}{t('ws.packets')}</span>
+            <span>{visiblePackets.length.toLocaleString()}{t('ws.packets')}</span>
           </>
         }
         right={

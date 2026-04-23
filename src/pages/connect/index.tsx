@@ -78,7 +78,12 @@ export function ConnectPage() {
   useEffect(() => {
     api.listSerialPorts().then(p => {
       setPorts(p);
-      if (p.length > 0 && !port) setPort(p[0]);
+      if (p.length > 0) {
+        // If saved port is no longer available, switch to first available
+        if (!port || !p.includes(port)) setPort(p[0]);
+      } else {
+        setPort('');
+      }
     }).catch(() => {});
   }, []);
 
@@ -118,6 +123,7 @@ export function ConnectPage() {
       const sessions = await api.getSessions();
       dispatch({ type: 'SET_SESSIONS', sessions });
       dispatch({ type: 'SET_ACTIVE_SESSION', id });
+      dispatch({ type: 'SET_RECEIVING', id, on: true });
       dispatch({ type: 'SET_SCREEN', screen: 'workspace' });
     } catch (e: any) { setSerialError(String(e)); }
     setSerialLoading(false);
@@ -133,6 +139,7 @@ export function ConnectPage() {
       const sessions = await api.getSessions();
       dispatch({ type: 'SET_SESSIONS', sessions });
       dispatch({ type: 'SET_ACTIVE_SESSION', id });
+      dispatch({ type: 'SET_RECEIVING', id, on: true });
       const entry = `${host}:${tcpPort}`;
       const next = [entry, ...recentHosts.filter(h => h !== entry)].slice(0, 5);
       setRecentHosts(next);
@@ -146,7 +153,11 @@ export function ConnectPage() {
     await api.disconnect(id);
     const sessions = await api.getSessions();
     dispatch({ type: 'SET_SESSIONS', sessions });
-    if (state.activeSessionId === id) dispatch({ type: 'SET_ACTIVE_SESSION', id: null });
+    if (state.activeSessionId === id) {
+      // Switch to another connected session, or null if none
+      const other = sessions.find(s => s.id !== id && s.connected);
+      dispatch({ type: 'SET_ACTIVE_SESSION', id: other?.id ?? null });
+    }
   }
 
   const portParams = `${baud} · ${dataBits}${parity[0].toUpperCase()}${stopBits}`;
@@ -268,10 +279,13 @@ export function ConnectPage() {
               <div className={s.formField}>
                 <label className={s.fieldLabel}>{t('connect.rxBuffer')}</label>
                 <div className={s.inlineRow}>
-                  <input className={s.inpSm} type="number" value={bufferKb} onChange={e => setBufferKb(Number(e.target.value))} />
+                  <input className={s.inpSm} type="text" inputMode="numeric" value={bufferKb}
+                    onChange={e => { const v = e.target.value.replace(/\D/g, ''); setBufferKb(v === '' ? 0 : parseInt(v, 10)); }}
+                    onFocus={e => e.target.select()} />
                   <span className={s.unit}>KB</span>
                 </div>
               </div>
+              {/* bufferKb is stored for reference but the backend uses its own default buffer size */}
             </div>
           </div>
 
@@ -397,14 +411,18 @@ export function ConnectPage() {
               <div className={s.formField}>
                 <label className={s.fieldLabel}>Keepalive</label>
                 <div className={s.inlineRow}>
-                  <input className={s.inpSm} type="number" value={keepalive} onChange={e => setKeepalive(Number(e.target.value))} />
+                  <input className={s.inpSm} type="text" inputMode="numeric" value={keepalive}
+                    onChange={e => { const v = e.target.value.replace(/\D/g, ''); setKeepalive(v === '' ? 0 : parseInt(v, 10)); }}
+                    onFocus={e => e.target.select()} />
                   <span className={s.unit}>s</span>
                 </div>
               </div>
               <div className={s.formField}>
                 <label className={s.fieldLabel}>{t('connect.connTimeout')}</label>
                 <div className={s.inlineRow}>
-                  <input className={s.inpSm} type="number" value={timeout} onChange={e => setTimeout_(Number(e.target.value))} />
+                  <input className={s.inpSm} type="text" inputMode="numeric" value={timeout}
+                    onChange={e => { const v = e.target.value.replace(/\D/g, ''); setTimeout_(v === '' ? 0 : parseInt(v, 10)); }}
+                    onFocus={e => e.target.select()} />
                   <span className={s.unit}>s</span>
                 </div>
               </div>
@@ -455,6 +473,8 @@ export function ConnectPage() {
                 if (isNaN(testPort) || testPort < 1 || testPort > 65535) { setTestStatus(t('connect.portNumError')); setTimeout(() => setTestStatus(''), 3000); return; }
                 const id = await api.connectTcp(host, testPort);
                 await api.disconnect(id);
+                // Add to blocklist so it never appears as a real session
+                dispatch({ type: 'REMOVE_SESSION', id });
                 setTestStatus(t('connect.testOk'));
               } catch (e: any) {
                 const msg = String(e).split(':').pop()?.trim() ?? String(e);

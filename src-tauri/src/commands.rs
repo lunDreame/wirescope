@@ -1,9 +1,11 @@
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_updater::UpdaterExt;
 use crate::state::{SharedState, SplitterConfig, TimingStats, SessionInfo, now_ms};
 use crate::checksum::{self, ChecksumResult};
 use crate::splitter::Splitter;
 use crate::{serial_port, socket};
+use crate::PendingUpdate;
 use std::sync::Arc;
 
 #[tauri::command]
@@ -154,7 +156,9 @@ pub fn get_packets(state: State<'_, SharedState>) -> Vec<crate::state::Packet> {
 
 #[tauri::command]
 pub fn clear_packets(state: State<'_, SharedState>) {
-    state.lock().packets.clear();
+    let mut st = state.lock();
+    st.packets.clear();
+    st.next_id = 1;
 }
 
 #[tauri::command]
@@ -232,18 +236,26 @@ pub fn get_timing_stats(state: State<'_, SharedState>) -> TimingStats {
 }
 
 #[tauri::command]
-pub async fn export_packets(app: AppHandle, json: String) -> Result<String, String> {
+pub async fn export_packets(app: AppHandle, json: String, ext: Option<String>) -> Result<String, String> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
 
+    let ext = ext.as_deref().unwrap_or("json");
+    let filter_label = match ext {
+        "csv" => "CSV",
+        "txt" => "Text",
+        "log" => "Log",
+        _     => "JSON",
+    };
+
     // Use async save_file + oneshot to avoid blocking the main thread event loop
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
-        .add_filter("JSON", &["json"])
-        .set_file_name(&format!("wirescope-{ts}.json"))
+        .add_filter(filter_label, &[ext])
+        .set_file_name(&format!("wirescope-{ts}.{ext}"))
         .save_file(move |path| { let _ = tx.send(path); });
 
     let file_path = rx.await
@@ -255,6 +267,59 @@ pub async fn export_packets(app: AppHandle, json: String) -> Result<String, Stri
         .to_path_buf();
     std::fs::write(&path, json.as_bytes()).map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().into_owned())
+}
+
+// ── OTA Update ──────────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize, Clone)]
+pub struct UpdateInfo {
+    pub version: String,
+    pub body: Option<String>,
+    pub date: Option<String>,
+    pub current_version: String,
+}
+
+/// Check GitHub Releases for a newer version. Returns None if already up to date.
+#[tauri::command]
+pub async fn check_update(
+    app: AppHandle,
+    pending: State<'_, PendingUpdate>,
+) -> Result<Option<UpdateInfo>, String> {
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let info = update.as_ref().map(|u| UpdateInfo {
+        version: u.version.clone(),
+        body: u.body.clone(),
+        date: u.date.map(|d| d.to_string()),
+        current_version: u.current_version.clone(),
+    });
+
+    *pending.0.lock() = update;
+    Ok(info)
+}
+
+/// Download and install a previously found update, then restart the app.
+#[tauri::command]
+pub async fn install_update(
+    app: AppHandle,
+    pending: State<'_, PendingUpdate>,
+) -> Result<(), String> {
+    let update = {
+        let mut lock = pending.0.lock();
+        lock.take().ok_or("업데이트 정보가 없습니다")?
+    };
+
+    update
+        .download_and_install(|_chunk, _total| {}, || {})
+        .await
+        .map_err(|e| e.to_string())?;
+
+    app.restart();
 }
 
 fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {

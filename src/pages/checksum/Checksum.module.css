@@ -9,7 +9,7 @@
 
 .body {
   display: grid;
-  grid-template-columns: 220px 1fr 260px;
+  grid-template-columns: 220px 1fr 320px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -224,6 +224,10 @@
   font-family: var(--mono);
   font-size: 11px;
   color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .pickerLen {
@@ -295,7 +299,7 @@
 .results {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   background: var(--surface);
 }
 
@@ -349,6 +353,8 @@
 .resultList {
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  flex-shrink: 0;
   padding: 8px 0;
 }
 
@@ -413,11 +419,15 @@
   color: var(--ink-3);
 }
 
-/* Algo info */
+/* Algo info — grows when custom editor is open */
 .algoInfo {
   padding: 12px 14px;
   border-top: 1px solid var(--line-2);
-  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .algoCard {
@@ -449,3 +459,237 @@
   color: var(--ink-2);
   line-height: 1.5;
 }
+
+/* Custom group in library */
+.libGroupCustom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 10px;
+}
+
+.addCustomBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--brand);
+  padding: 1px 4px;
+  border-radius: 3px;
+  transition: background 0.12s;
+}
+
+.addCustomBtn:hover { background: oklch(from var(--brand) l c h / 0.1); }
+
+.customEmpty {
+  padding: 6px 14px 10px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* Custom algorithm result */
+.resultErr { color: var(--err) !important; background: oklch(from var(--err) l c h / 0.1) !important; }
+
+/* Custom editor panel */
+.customEditorCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.customField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.customLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.customNameInput {
+  height: 28px;
+  padding: 0 8px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  color: var(--ink);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.customNameInput:focus { border-color: var(--brand); }
+
+.codeWrapper {
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  overflow: hidden;
+  transition: border-color 0.15s;
+  position: relative;
+}
+
+.codeWrapper:focus-within { border-color: var(--brand); }
+
+/* CodeMirror editor embedded in codeWrapper */
+
+.cmEditor {
+  display: block;
+}
+
+/* height is set via the `height` prop on <CodeMirror height="220px"> */
+.cmEditor :global(.cm-editor) {
+  background: var(--panel) !important;
+}
+
+.cmEditor :global(.cm-scroller) {
+  font-family: var(--mono) !important;
+  font-size: 12px !important;
+  line-height: 1.65 !important;
+  /* Horizontal scrollbar docked to bottom of the editor */
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Stretch gutter to fill full editor height (not just content height) */
+.cmEditor :global(.cm-gutters) {
+  background: var(--surface) !important;
+  border-right: 1px solid var(--line-2) !important;
+  color: var(--ink-3) !important;
+  font-size: 10.5px !important;
+  min-height: 100%;
+}
+
+.cmEditor :global(.cm-content) {
+  padding: 6px 0 !important;
+}
+
+.cmEditor :global(.cm-focused) {
+  outline: none !important;
+}
+
+/* Light theme: use app surface colors */
+.cmEditor :global(.cm-editor.cm-focused .cm-selectionBackground),
+.cmEditor :global(.cm-selectionBackground) {
+  background: oklch(from var(--brand) l c h / 0.15) !important;
+}
+
+.cmEditor :global(.cm-activeLine) {
+  background: oklch(from var(--brand) l c h / 0.05) !important;
+}
+
+.cmEditor :global(.cm-activeLineGutter) {
+  background: oklch(from var(--brand) l c h / 0.08) !important;
+}
+
+/* keep textarea as fallback (no longer used, but kept for safety) */
+.codeArea {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: none;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  resize: none;
+  outline: none;
+  display: block;
+}
+
+.codeHint {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  font-family: var(--mono);
+}
+
+.testResult {
+  padding: 6px 10px;
+  border-radius: var(--r-2);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.testOk {
+  background: oklch(from var(--ok) l c h / 0.08);
+  border: 1px solid oklch(from var(--ok) l c h / 0.25);
+  color: var(--ok);
+}
+
+.testErr {
+  background: oklch(from var(--err) l c h / 0.08);
+  border: 1px solid oklch(from var(--err) l c h / 0.25);
+  color: var(--err);
+}
+
+.customActions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.customTestBtn {
+  height: 26px;
+  padding: 0 10px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.customTestBtn:hover { border-color: var(--brand); color: var(--brand); }
+
+.customSaveBtn {
+  height: 26px;
+  padding: 0 10px;
+  background: var(--brand);
+  border: 1px solid transparent;
+  border-radius: var(--r-2);
+  cursor: pointer;
+  font-size: 11.5px;
+  color: #fff;
+  font-weight: 600;
+  transition: opacity 0.12s;
+}
+
+.customSaveBtn:hover { opacity: 0.85; }
+
+.customCancelBtn {
+  height: 26px;
+  padding: 0 10px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.customCancelBtn:hover { border-color: var(--ink-3); color: var(--ink); }
+
+.customDeleteBtn {
+  height: 26px;
+  padding: 0 10px;
+  background: none;
+  border: 1px solid oklch(from var(--err) l c h / 0.3);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--err);
+  transition: background 0.12s;
+  margin-left: auto;
+}
+
+.customDeleteBtn:hover { background: oklch(from var(--err) l c h / 0.08); }

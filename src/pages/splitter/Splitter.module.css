@@ -333,6 +333,12 @@
   font-weight: 700;
 }
 
+.hexCs {
+  background: oklch(from var(--warn) l c h / 0.18);
+  color: var(--warn);
+  font-weight: 700;
+}
+
 .hexMore {
   font-family: var(--mono);
   font-size: 10px;
@@ -394,3 +400,30 @@
   font-size: 11px;
   color: var(--ink-3);
 }
+
+.regexHintBox {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+
+.autoDetectBtn {
+  height: 22px;
+  padding: 0 8px;
+  background: oklch(from var(--brand) l c h / 0.08);
+  border: 1px solid oklch(from var(--brand) l c h / 0.25);
+  border-radius: var(--r-1);
+  cursor: pointer;
+  font-size: 10.5px;
+  color: var(--brand);
+  font-family: var(--ui);
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.autoDetectBtn:hover { background: oklch(from var(--brand) l c h / 0.15); }

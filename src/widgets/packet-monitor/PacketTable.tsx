@@ -56,7 +56,7 @@ export function PacketTable() {
               </svg>
             </div>
             <div className={s.emptyText}>
-              {state.sessions.some(s => s.connected)
+              {state.sessions.find(s => s.id === state.activeSessionId)?.connected
                 ? t('table.waiting')
                 : t('table.connectFirst')}
             </div>
@@ -83,6 +83,10 @@ export function PacketTable() {
                 fmt={settings.byteFormat}
                 sofBytes={splitter.sof}
                 eofBytes={splitter.eof}
+                eofInclude={splitter.eof_include}
+                checksumAlgo={splitter.checksum_algorithm}
+                checksumOffset={splitter.checksum_offset}
+                checksumSize={splitter.checksum_size}
               />
             </div>
           );
@@ -99,14 +103,22 @@ interface RowProps {
   fmt: string;
   sofBytes: number[];
   eofBytes: number[];
+  eofInclude: boolean;
+  checksumAlgo: string;
+  checksumOffset: number;
+  checksumSize: number;
 }
 
-const PacketRow = memo(function PacketRow({ packet: p, selected, onSelect, fmt, sofBytes, eofBytes }: RowProps) {
+const PacketRow = memo(function PacketRow({
+  packet: p, selected, onSelect, fmt,
+  sofBytes, eofBytes, eofInclude,
+  checksumAlgo, checksumOffset, checksumSize,
+}: RowProps) {
   const dir = p.direction.toLowerCase() as 'tx' | 'rx';
   const isErr = p.checksum_ok === false;
 
   const displayBytes = fmt === 'hex'
-    ? renderHexWithHighlights(p.bytes, sofBytes, eofBytes, p.checksum_ok)
+    ? renderHexWithHighlights(p.bytes, sofBytes, eofBytes, eofInclude, p.checksum_ok, checksumAlgo, checksumOffset, checksumSize)
     : <span>{formatBytes(p.bytes, fmt as any)}</span>;
 
   const gapClass = p.gap_ms === null ? '' : p.gap_ms > 500 ? s.gapVeryLong : p.gap_ms > 100 ? s.gapLong : '';
@@ -135,22 +147,44 @@ function renderHexWithHighlights(
   bytes: number[],
   sofBytes: number[],
   eofBytes: number[],
+  eofInclude: boolean,
   checksumOk: boolean | null,
+  checksumAlgo: string,
+  checksumOffset: number,
+  checksumSize: number,
 ) {
+  const n = bytes.length;
   const eofLen = eofBytes.length;
-  // Only highlight EOF if the packet actually ends with the configured EOF pattern
-  const eofMatch = eofLen > 0 && bytes.length >= eofLen &&
-    bytes.slice(bytes.length - eofLen).every((b, j) => b === eofBytes[j]);
+
+  // SOF: highlight only when packet actually starts with the configured bytes
+  const sofMatch = sofBytes.length > 0 && sofBytes.every((b, j) => b === bytes[j]);
+
+  // EOF: only highlight when eof_include is true (bytes are present in the packet)
+  const eofMatch = eofInclude && eofLen > 0 && n >= eofLen &&
+    bytes.slice(n - eofLen).every((b, j) => b === eofBytes[j]);
+
+  // Checksum byte range
+  let csStart = -1, csEnd = -1;
+  if (checksumAlgo && checksumSize > 0) {
+    csStart = checksumOffset < 0 ? n + checksumOffset : checksumOffset;
+    csEnd = csStart + checksumSize;
+    if (csStart < 0 || csEnd > n) { csStart = -1; csEnd = -1; }
+  }
 
   return (
     <>
       {bytes.map((b, i) => {
         const h = b.toString(16).padStart(2, '0').toUpperCase();
-        const isSof = sofBytes.length > 0 && i < sofBytes.length;
-        const isEof = eofMatch && i >= bytes.length - eofLen;
-        const cls = (isSof || isEof)
-          ? s.hexSync
-          : checksumOk === false ? s.hexBad : s.hexPlain;
+        const isSof = sofMatch && i < sofBytes.length;
+        const isEof = eofMatch && i >= n - eofLen;
+        const isCs = csStart >= 0 && i >= csStart && i < csEnd;
+
+        let cls: string;
+        if (isSof) cls = s.hexSof;
+        else if (isEof) cls = s.hexEof;
+        else if (isCs) cls = checksumOk === false ? s.hexBad : s.hexCs;
+        else cls = s.hexPlain;
+
         return <span key={i} className={cls}>{h}</span>;
       })}
     </>

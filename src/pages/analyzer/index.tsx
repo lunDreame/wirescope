@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import s from './Analyzer.module.css';
 import { StatusBar, StatusChip, StatusSep } from '../../shared/ui/StatusBar';
 import { SectionHeading } from '../../shared/ui/SectionHeading';
-import { useApp } from '../../app/store';
+import { useApp, useSessionPackets } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
 import { formatSize, formatDelta } from '../../shared/lib/format';
 import type { TimingStats } from '../../shared/types';
@@ -23,7 +23,7 @@ function StatCard({ label, value, unit, sub }: { label: string; value: string | 
 export function AnalyzerPage() {
   const { state } = useApp();
   const t = useT();
-  const packets = state.packets;
+  const packets = useSessionPackets();  // use all session packets, not filtered view
 
   const stats: TimingStats | null = useMemo(() => {
     if (packets.length < 2) return null;
@@ -107,7 +107,7 @@ export function AnalyzerPage() {
         <div className={s.statsPanel}>
           <div className={s.panelHeader}>
             <h2 className={s.panelTitle}>{t('analyzer.title')}</h2>
-            <p className={s.panelSub}>{packets.length.toLocaleString()} pkts · {formatSize(state.bufferBytes)}</p>
+            <p className={s.panelSub}>{packets.length.toLocaleString()} pkts · {formatSize(packets.reduce((a, p) => a + p.bytes.length, 0))}</p>
           </div>
 
           {packets.length < 2 ? (

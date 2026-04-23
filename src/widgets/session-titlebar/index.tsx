@@ -28,8 +28,9 @@ export function SessionTitleBar() {
 
   async function closeSession(id: string) {
     try { await api.disconnect(id); } catch {}
+    const name = sessions.find(s => s.id === id)?.name ?? id;
+    dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `Session closed: ${name}`, kind: 'info', session_id: id } });
     dispatch({ type: 'REMOVE_SESSION', id });
-    dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `Session closed: ${id}`, kind: 'info' } });
   }
 
   return (

@@ -1,12 +1,13 @@
 import { useState, KeyboardEvent } from 'react';
 import s from './FilterBar.module.css';
-import { useApp, usePackets } from '../../app/store';
+import { useApp, usePackets, useSessionPackets } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
 
 export function FilterBar() {
   const { state, dispatch } = useApp();
   const { filter } = state;
   const visible = usePackets();
+  const sessionTotal = useSessionPackets();
   const t = useT();
   const [input, setInput] = useState('');
 
@@ -17,6 +18,7 @@ export function FilterBar() {
     { syntax: 'checksum:pass',  desc: t('filter.csumPass') },
     { syntax: 'len:12',         desc: t('filter.lenExact') },
     { syntax: 'len>8 / len<4',  desc: t('filter.lenRange') },
+    { syntax: 'session:COM3',   desc: t('filter.session') },
     { syntax: '!contains:68',   desc: t('filter.negate') },
     { syntax: '68 01 00 16',    desc: t('filter.hexFree') },
   ];
@@ -98,7 +100,7 @@ export function FilterBar() {
       <div style={{ flex: 1 }} />
 
       <span className={s.count}>
-        <b>{visible.length.toLocaleString()}</b>{t('filter.showing')}{state.packets.length.toLocaleString()}{t('filter.total')}
+        <b>{visible.length.toLocaleString()}</b>{t('filter.showing')}{sessionTotal.length.toLocaleString()}{t('filter.total')}
       </span>
     </div>
   );

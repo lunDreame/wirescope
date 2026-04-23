@@ -27,6 +27,8 @@ pub struct SplitterConfig {
     pub checksum_algorithm: String,
     pub checksum_offset: i32,
     pub checksum_size: usize,
+    #[serde(default)]
+    pub checksum_exclude_sof: bool,
 }
 
 impl Default for SplitterConfig {
@@ -43,6 +45,7 @@ impl Default for SplitterConfig {
             checksum_algorithm: "none".into(),
             checksum_offset: -2,
             checksum_size: 2,
+            checksum_exclude_sof: false,
         }
     }
 }

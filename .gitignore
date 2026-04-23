@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.serena
+.playwright-mcp
+/e2e
+/test-results
+playwright.config.ts

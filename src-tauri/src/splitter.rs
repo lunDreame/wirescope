@@ -166,7 +166,13 @@ impl Splitter {
         if cs_start + size > payload.len() {
             return Some(false);
         }
-        let data = &payload[..cs_start];
+        // Optionally skip SOF bytes from the data range
+        let data_start = if self.config.checksum_exclude_sof {
+            self.config.sof.len().min(cs_start)
+        } else {
+            0
+        };
+        let data = &payload[data_start..cs_start];
         let expected = &payload[cs_start..cs_start + size];
         Some(checksum::verify(algo, data, expected))
     }

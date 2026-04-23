@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
+import { NumericInput } from '../../shared/ui/Input';
+import { useSessionPackets } from '../../app/store';
 import s from './Splitter.module.css';
 import { StatusBar, StatusChip, StatusSep } from '../../shared/ui/StatusBar';
 import { SectionHeading } from '../../shared/ui/SectionHeading';
 import { Button } from '../../shared/ui/Button';
 import { SegmentedControl } from '../../shared/ui/SegmentedControl';
 import { Badge } from '../../shared/ui/Badge';
-import { useApp } from '../../app/store';
+import { useApp, useCustomChecksums } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
 import * as api from '../../shared/api/tauri';
 import { CHECKSUM_PRESETS } from '../../shared/config/tokens';
@@ -13,22 +15,24 @@ import type { SplitterConfig } from '../../shared/types';
 
 const DEFAULT_CONFIG: SplitterConfig = {
   method: 'delimiter',
+  regex_pattern: '',
   sof: [],
   eof: [],
   eof_include: true,
-  gap_ms: 10,
-  length_field_offset: 1,
-  length_field_size: 1,
+  gap_ms: 3.5,
+  length_field_offset: 2,
+  length_field_size: 2,
   length_includes_header: false,
-  min_packet_size: 4,
+  min_packet_size: 6,
   max_packet_size: 256,
   checksum_algorithm: '',
-  checksum_offset: -2,
-  checksum_size: 2,
+  checksum_offset: -1,
+  checksum_size: 1,
+  checksum_exclude_sof: false,
   mark_errors: true,
   resync_on_error: true,
   discard_on_disconnect: false,
-  inner_gap_warn_ms: 5,
+  inner_gap_warn_ms: 500,
 };
 
 function hexStr(bytes: number[]) {
@@ -44,6 +48,7 @@ function parseHexInput(s: string): number[] {
 
 export function SplitterPage() {
   const { state, dispatch } = useApp();
+  const customChecksums = useCustomChecksums();
   const t = useT();
 
   const METHODS = [
@@ -52,23 +57,23 @@ export function SplitterPage() {
     { value: 'gap',          label: t('splitter.gap') },
     { value: 'regex',        label: t('splitter.regex') },
   ] as const;
+  const sessionPackets = useSessionPackets();
   const [cfg, setCfg] = useState<SplitterConfig>(state.splitter ?? DEFAULT_CONFIG);
   const [sofHex, setSofHex] = useState(hexStr(cfg.sof));
   const [eofHex, setEofHex] = useState(hexStr(cfg.eof));
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(true);
   const [previewPackets, setPreviewPackets] = useState<number[][]>([]);
-
-  // Redux state is the source of truth — Rust is synced on AppProvider mount
+  // gap unit: display in µs / ms / s, internally always stored as ms
+  const [gapUnit, setGapUnit] = useState<'µs' | 'ms' | 's'>('ms');
 
   useEffect(() => {
-    // Build synthetic preview from last 8 packets
-    const pkts = state.packets.slice(-8).map(p => p.bytes);
-    setPreviewPackets(pkts);
-  }, [state.packets]);
+    setPreviewPackets(sessionPackets.slice(-8).map(p => p.bytes));
+  }, [sessionPackets]);
 
   function update(patch: Partial<SplitterConfig>) {
+    const hasChange = Object.entries(patch).some(([k, v]) => (cfg as unknown as Record<string, unknown>)[k] !== v);
     setCfg(prev => ({ ...prev, ...patch }));
-    setSaved(false);
+    if (hasChange) setSaved(false);
   }
 
   async function apply() {
@@ -81,7 +86,6 @@ export function SplitterPage() {
     await api.setSplitter(next);
     dispatch({ type: 'SET_SPLITTER', config: next });
     setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
   }
 
   const sofDisplay = sofHex || t('splitter.none');
@@ -161,8 +165,9 @@ export function SplitterPage() {
                 </div>
                 <div className={s.field}>
                   <label className={s.label}>{t('splitter.lenOffset')}</label>
-                  <input className={s.inpNum} type="number" value={cfg.length_field_offset}
-                    onChange={e => update({ length_field_offset: Number(e.target.value) })} />
+                  <input className={s.inpNum} type="text" inputMode="numeric" value={cfg.length_field_offset}
+                    onChange={e => { const v = e.target.value.replace(/\D/g, ''); update({ length_field_offset: v === '' ? 0 : parseInt(v, 10) }); }}
+                    onFocus={e => e.target.select()} />
                 </div>
                 <div className={s.field}>
                   <label className={s.label}>{t('splitter.lenSize')}</label>
@@ -182,6 +187,26 @@ export function SplitterPage() {
             </div>
           )}
 
+          {/* Regex settings */}
+          {cfg.method === 'regex' && (
+            <div className={s.section}>
+              <SectionHeading>{t('splitter.regexSection')}</SectionHeading>
+              <div className={s.field}>
+                <label className={s.label}>{t('splitter.regexPattern')}</label>
+                <input
+                  className={s.inp}
+                  value={cfg.regex_pattern ?? ''}
+                  onChange={e => update({ regex_pattern: e.target.value })}
+                  placeholder={t('splitter.regexPlaceholder')}
+                  spellCheck={false}
+                />
+              </div>
+              <div className={s.regexHintBox}>
+                <span>{t('splitter.regexHintExamples')}</span>
+              </div>
+            </div>
+          )}
+
           {/* Gap settings */}
           {cfg.method === 'gap' && (
             <div className={s.section}>
@@ -190,16 +215,30 @@ export function SplitterPage() {
                 <div className={s.field}>
                   <label className={s.label}>{t('splitter.gapThreshold')}</label>
                   <div className={s.inlineRow}>
-                    <input className={s.inpNum} type="number" value={cfg.gap_ms}
-                      onChange={e => update({ gap_ms: Number(e.target.value) })} />
-                    <span className={s.unit}>ms</span>
+                    <NumericInput className={s.inpNum} allowFloat
+                      value={
+                        gapUnit === 'µs' ? +(cfg.gap_ms * 1000).toPrecision(6) :
+                        gapUnit === 's'  ? +(cfg.gap_ms / 1000).toPrecision(6) :
+                        cfg.gap_ms
+                      }
+                      onChange={v => update({
+                        gap_ms: gapUnit === 'µs' ? v / 1000 :
+                                gapUnit === 's'  ? v * 1000 : v
+                      })} />
+                    <select className={s.sel} style={{ width: 52, padding: '0 4px' }}
+                      value={gapUnit}
+                      onChange={e => setGapUnit(e.target.value as 'µs' | 'ms' | 's')}>
+                      <option value="µs">µs</option>
+                      <option value="ms">ms</option>
+                      <option value="s">s</option>
+                    </select>
                   </div>
                 </div>
                 <div className={s.field}>
                   <label className={s.label}>{t('splitter.innerGapWarn')}</label>
                   <div className={s.inlineRow}>
-                    <input className={s.inpNum} type="number" value={cfg.inner_gap_warn_ms}
-                      onChange={e => update({ inner_gap_warn_ms: Number(e.target.value) })} />
+                    <NumericInput className={s.inpNum} value={cfg.inner_gap_warn_ms} allowFloat
+                      onChange={v => update({ inner_gap_warn_ms: v })} />
                     <span className={s.unit}>ms</span>
                   </div>
                 </div>
@@ -214,16 +253,18 @@ export function SplitterPage() {
               <div className={s.field}>
                 <label className={s.label}>{t('splitter.minSize')}</label>
                 <div className={s.inlineRow}>
-                  <input className={s.inpNum} type="number" value={cfg.min_packet_size}
-                    onChange={e => update({ min_packet_size: Number(e.target.value) })} />
+                  <input className={s.inpNum} type="text" inputMode="numeric" value={cfg.min_packet_size}
+                    onChange={e => { const v = e.target.value.replace(/\D/g, ''); update({ min_packet_size: v === '' ? 0 : parseInt(v, 10) }); }}
+                    onFocus={e => e.target.select()} />
                   <span className={s.unit}>B</span>
                 </div>
               </div>
               <div className={s.field}>
                 <label className={s.label}>{t('splitter.maxSize')}</label>
                 <div className={s.inlineRow}>
-                  <input className={s.inpNum} type="number" value={cfg.max_packet_size}
-                    onChange={e => update({ max_packet_size: Number(e.target.value) })} />
+                  <input className={s.inpNum} type="text" inputMode="numeric" value={cfg.max_packet_size}
+                    onChange={e => { const v = e.target.value.replace(/\D/g, ''); update({ max_packet_size: v === '' ? 0 : parseInt(v, 10) }); }}
+                    onFocus={e => e.target.select()} />
                   <span className={s.unit}>B</span>
                 </div>
               </div>
@@ -242,6 +283,13 @@ export function SplitterPage() {
                   {CHECKSUM_PRESETS.map(p => (
                     <option key={p.id} value={p.id}>{p.label}</option>
                   ))}
+                  {customChecksums.length > 0 && (
+                    <optgroup label="Custom">
+                      {customChecksums.map(cs => (
+                        <option key={cs.id} value={`custom:${cs.id}`}>{cs.name || '(unnamed)'}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
               {cfg.checksum_algorithm && (
@@ -249,22 +297,45 @@ export function SplitterPage() {
                   <div className={s.field}>
                     <label className={s.label}>{t('splitter.csumOffset')}</label>
                     <div className={s.inlineRow}>
-                      <input className={s.inpNum} type="number" value={cfg.checksum_offset}
-                        onChange={e => update({ checksum_offset: Number(e.target.value) })} />
+                      <NumericInput className={s.inpNum} value={cfg.checksum_offset} allowNegative
+                        onChange={v => update({ checksum_offset: v })} />
                       <span className={s.unit}>B</span>
+                      {(() => {
+                        const liveEof = parseHexInput(eofHex);
+                        return liveEof.length > 0 && (
+                          <button
+                            className={s.autoDetectBtn}
+                            type="button"
+                            title={t('splitter.csumAutoDetectTip')}
+                            onClick={() => update({ checksum_offset: -(liveEof.length + 1), checksum_size: 1 })}
+                          >
+                            {t('splitter.csumAutoDetect')}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className={s.field}>
                     <label className={s.label}>{t('splitter.csumSize')}</label>
                     <div className={s.inlineRow}>
-                      <input className={s.inpNum} type="number" value={cfg.checksum_size}
-                        onChange={e => update({ checksum_size: Number(e.target.value) })} />
+                      <input className={s.inpNum} type="text" inputMode="numeric" value={cfg.checksum_size}
+                        onChange={e => { const v = e.target.value.replace(/\D/g, ''); update({ checksum_size: v === '' ? 0 : parseInt(v, 10) }); }}
+                        onFocus={e => e.target.select()} />
                       <span className={s.unit}>B</span>
                     </div>
                   </div>
                 </>
               )}
             </div>
+            {cfg.checksum_algorithm && parseHexInput(sofHex).length > 0 && (
+              <label className={s.checkRow} style={{ marginTop: 6 }}>
+                <input type="checkbox"
+                  checked={!!cfg.checksum_exclude_sof}
+                  onChange={e => update({ checksum_exclude_sof: e.target.checked })}
+                />
+                <span>{t('splitter.csumExcludeSof')}</span>
+              </label>
+            )}
           </div>
 
           {/* Error handling */}
@@ -293,11 +364,13 @@ export function SplitterPage() {
             <Button variant="primary" onClick={apply}>
               {saved ? t('splitter.applied') : t('splitter.apply')}
             </Button>
-            <Button onClick={() => {
+            <Button onClick={async () => {
               setCfg(DEFAULT_CONFIG);
               setSofHex(hexStr(DEFAULT_CONFIG.sof));
               setEofHex(hexStr(DEFAULT_CONFIG.eof));
-              setSaved(false);
+              setSaved(true);
+              await api.setSplitter(DEFAULT_CONFIG);
+              dispatch({ type: 'SET_SPLITTER', config: DEFAULT_CONFIG });
             }}>{t('splitter.reset')}</Button>
           </div>
         </div>
@@ -336,7 +409,17 @@ export function SplitterPage() {
             {cfg.method === 'gap' && (
               <div className={s.cfgRow}>
                 <span className={s.cfgKey}>{t('splitter.gapShort')}</span>
-                <code className={s.cfgVal}>{cfg.gap_ms}ms</code>
+                <code className={s.cfgVal}>
+                  {gapUnit === 'µs' ? `${+(cfg.gap_ms * 1000).toPrecision(4)}µs` :
+                   gapUnit === 's'  ? `${+(cfg.gap_ms / 1000).toPrecision(4)}s` :
+                   `${cfg.gap_ms}ms`}
+                </code>
+              </div>
+            )}
+            {cfg.method === 'regex' && (
+              <div className={s.cfgRow}>
+                <span className={s.cfgKey}>{t('splitter.regexPattern')}</span>
+                <code className={s.cfgVal}>{cfg.regex_pattern || t('splitter.none')}</code>
               </div>
             )}
             <div className={s.cfgRow}>
@@ -380,7 +463,7 @@ export function SplitterPage() {
           {/* Visual diagram */}
           <div className={s.diagramSection}>
             <SectionHeading>{t('splitter.diagram')}</SectionHeading>
-            <PacketDiagram cfg={cfg} sofHex={sofHex} eofHex={eofHex} />
+            <PacketDiagram cfg={cfg} sofHex={sofHex} eofHex={eofHex} gapUnit={gapUnit} />
           </div>
         </div>
       </div>
@@ -392,7 +475,7 @@ export function SplitterPage() {
               {saved ? t('splitter.statusApplied') : t('splitter.statusPending')}
             </StatusChip>
             <StatusSep />
-            <span>{state.packets.length.toLocaleString()}{t('splitter.packetsMethod')}{METHODS.find(m => m.value === cfg.method)?.label}</span>
+            <span>{sessionPackets.length.toLocaleString()}{t('splitter.packetsMethod')}{METHODS.find(m => m.value === cfg.method)?.label}</span>
           </>
         }
         right={<span>{t('splitter.statusRight')}</span>}
@@ -452,8 +535,12 @@ function PreviewPacket({ index, bytes, cfg, sofBytes, eofBytes }: {
           const eofMatch = eofLen > 0 && bytes.length >= eofLen &&
             bytes.slice(bytes.length - eofLen).every((eb, j) => eb === eofBytes[j]);
           const isEof = eofMatch && i >= bytes.length - eofLen;
+          const csOffset = cfg.checksum_offset;
+          const csStart = csOffset < 0 ? bytes.length + csOffset : csOffset;
+          const isCs = !!(cfg.checksum_algorithm && cfg.checksum_algorithm !== '' &&
+            csStart >= 0 && i >= csStart && i < csStart + cfg.checksum_size);
           return (
-            <span key={i} className={`${s.hexByte} ${isSof ? s.hexSof : ''} ${isEof ? s.hexEof : ''}`}>
+            <span key={i} className={`${s.hexByte} ${isSof ? s.hexSof : ''} ${isEof ? s.hexEof : ''} ${isCs ? s.hexCs : ''}`}>
               {b.toString(16).padStart(2, '0').toUpperCase()}
             </span>
           );
@@ -464,7 +551,7 @@ function PreviewPacket({ index, bytes, cfg, sofBytes, eofBytes }: {
   );
 }
 
-function PacketDiagram({ cfg, sofHex, eofHex }: { cfg: SplitterConfig; sofHex: string; eofHex: string }) {
+function PacketDiagram({ cfg, sofHex, eofHex, gapUnit = 'ms' }: { cfg: SplitterConfig; sofHex: string; eofHex: string; gapUnit?: 'µs' | 'ms' | 's' }) {
   const t = useT();
   const method = cfg.method;
 
@@ -511,7 +598,11 @@ function PacketDiagram({ cfg, sofHex, eofHex }: { cfg: SplitterConfig; sofHex: s
       <div className={s.diagram}>
         <div className={s.diagramRow}>
           <div className={`${s.diagramBlock} ${s.diagramData}`}><span>Pkt A</span><code>…</code></div>
-          <div className={s.diagramGapLabel}>≥ {cfg.gap_ms}{t('splitter.silence')}</div>
+          <div className={s.diagramGapLabel}>≥ {
+            gapUnit === 'µs' ? `${+(cfg.gap_ms * 1000).toPrecision(4)}µs` :
+            gapUnit === 's'  ? `${+(cfg.gap_ms / 1000).toPrecision(4)}s` :
+            `${cfg.gap_ms}ms`
+          }{t('splitter.silence')}</div>
           <div className={`${s.diagramBlock} ${s.diagramData}`}><span>Pkt B</span><code>…</code></div>
         </div>
         <p className={s.diagramHint}>{t('splitter.gapBoundary')}{cfg.inner_gap_warn_ms}ms</p>

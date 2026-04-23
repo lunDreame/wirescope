@@ -1,23 +1,29 @@
 .dump {
   font-family: var(--mono);
   font-size: 11.5px;
-  line-height: 1.65;
+  line-height: 1.9;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r-2);
   padding: 10px 12px;
-  overflow: auto;
-  white-space: pre;
+  overflow: hidden;
+  /* Responsive wrap: bytes fill the container width, then wrap */
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  column-gap: 6px;
+  row-gap: 0;
 }
 
-.row { display: flex; gap: 2px; }
-.off { color: var(--ink-3); }
-.hex { color: var(--ink); }
-.asc { color: var(--ink-2); }
+/* Each byte cell */
+.cell {
+  display: inline-block;
+  color: var(--ink);
+}
 
-/* highlight kinds */
-.sync { color: oklch(0.42 0.12 245); font-weight: 600; }
-.end  { color: oklch(0.42 0.12 245); font-weight: 600; }
-.chk  { color: var(--ok); font-weight: 600; }
-.bad  { color: var(--err); font-weight: 600; text-decoration: underline wavy oklch(0.65 0.15 25); text-underline-offset: 2px; }
-.highlight { background: oklch(0.94 0.05 245); border-radius: 2px; }
+/* highlight kinds — SOF blue / EOF green / checksum orange / bad red */
+.sync { color: var(--brand);  font-weight: 700; }
+.end  { color: var(--tx);     font-weight: 700; }
+.chk  { color: var(--warn);   font-weight: 700; }
+.bad  { color: var(--err); font-weight: 600; text-decoration: underline wavy var(--wavy-err); text-underline-offset: 2px; }
+.highlight { background: var(--hex-highlight); border-radius: 2px; }

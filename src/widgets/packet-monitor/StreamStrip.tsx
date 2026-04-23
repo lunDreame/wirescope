@@ -1,17 +1,21 @@
 import { useRef, useEffect } from 'react';
 import s from './StreamStrip.module.css';
-import { useApp } from '../../app/store';
+import { useApp, useSessionPackets } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
 
 export function StreamStrip() {
   const { state } = useApp();
-  const { packets, splitter } = state;
+  const { splitter } = state;
+  const packets = useSessionPackets();
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const recent = packets.slice(-300);
-  const totalPps = packets.length > 1
-    ? Math.round(packets.length / ((packets[packets.length - 1].timestamp_ms - packets[0].timestamp_ms) / 1000) || 0)
+  const timespan = packets.length > 1
+    ? packets[packets.length - 1].timestamp_ms - packets[0].timestamp_ms
+    : 0;
+  const totalPps = timespan > 0
+    ? Math.round(packets.length / (timespan / 1000))
     : 0;
 
   const avgGap = packets.filter(p => p.gap_ms).reduce((a, p) => a + (p.gap_ms ?? 0), 0) / (packets.filter(p => p.gap_ms).length || 1);
