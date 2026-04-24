@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import s from './Rail.module.css';
 import { useApp, useSessionPackets } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
@@ -33,11 +33,22 @@ const SendIcon = () => (
 
 export function ConnectionRail() {
   const { state, dispatch } = useApp();
-  const { sessions, activeSessionId, screen, filter, savedFilters, txPresets, packets } = state;
+  const { sessions, activeSessionId, screen, filter, savedFilters, txPresets, packets, filterChangedAt } = state;
   const t = useT();
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const totalPackets = useSessionPackets().length;  // unfiltered session packet count
   const [addingFilter, setAddingFilter] = useState(false);
+  const [filterNotice, setFilterNotice] = useState(false);
+  const prevFilterChangedAt = useRef(filterChangedAt);
+
+  useEffect(() => {
+    if (filterChangedAt !== prevFilterChangedAt.current) {
+      prevFilterChangedAt.current = filterChangedAt;
+      setFilterNotice(true);
+      const t = setTimeout(() => setFilterNotice(false), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [filterChangedAt]);
 
   // Compute RX bytes per session from live packet data (SessionInfo.rx_bytes is only set at connect time)
   const rxBytesMap: Record<string, number> = {};
@@ -167,7 +178,12 @@ export function ConnectionRail() {
 
       {/* Saved filters */}
       <div className={s.section}>
-        <div className={s.sectionHead}>{t('rail.savedFilters')}</div>
+        <div className={s.sectionHead}>
+          {t('rail.savedFilters')}
+          {filterNotice && (
+            <span className={s.filterNotice}>{t('rail.filterRestored')}</span>
+          )}
+        </div>
         <div className={s.subnav}>
           {savedFilters.map(f => (
             <div

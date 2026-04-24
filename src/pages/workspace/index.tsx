@@ -20,7 +20,9 @@ export function WorkspacePage() {
   const visiblePackets = usePackets();
   const isReceiving = useIsReceiving();
   const t = useT();
+  const bufferMaxKb = (() => { try { return JSON.parse(localStorage.getItem('ws_serial_buffer') ?? '64') as number; } catch { return 64; } })();
   const [showExport, setShowExport] = useState(false);
+  const [exportToast, setExportToast] = useState('');
 
   const connected = activeSession?.connected ?? false;
   const activeId = state.activeSessionId;
@@ -36,9 +38,10 @@ export function WorkspacePage() {
 
   const handleClear = useCallback(async () => {
     if (!activeId) return;
+    if (visiblePackets.length > 0 && !window.confirm(t('ws.clearConfirm'))) return;
     await api.clearPackets();
     dispatch({ type: 'CLEAR_PACKETS', id: activeId });
-  }, [activeId, dispatch]);
+  }, [activeId, dispatch, visiblePackets.length, t]);
 
   // ⌘R toggle receive  ⌘K clear packets
   useEffect(() => {
@@ -57,7 +60,6 @@ export function WorkspacePage() {
   }, [toggleReceive, handleClear, connected]);
 
   function handleExport() {
-    if (visiblePackets.length === 0) return;
     setShowExport(true);
   }
 
@@ -65,8 +67,12 @@ export function WorkspacePage() {
     try {
       const path = await api.exportPackets(content, ext);
       dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('ws.exportDone')}${path}`, kind: 'info', session_id: activeId ?? undefined } });
+      setExportToast(`${t('ws.exportDone')}${path}`);
+      setTimeout(() => setExportToast(''), 4000);
     } catch (e: any) {
       dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `${t('ws.exportFailed')}${e}`, kind: 'err', session_id: activeId ?? undefined } });
+      setExportToast(`${t('ws.exportFailed')}${e}`);
+      setTimeout(() => setExportToast(''), 4000);
     }
   }
 
@@ -78,6 +84,17 @@ export function WorkspacePage() {
         packets={visiblePackets}
         onExport={doExport}
       />
+      {exportToast && (
+        <div style={{
+          position: 'fixed', bottom: 48, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--surface-2, #222)', color: 'var(--ink-1, #eee)',
+          padding: '8px 16px', borderRadius: 8, fontSize: 12,
+          fontFamily: 'var(--mono)', zIndex: 9999, maxWidth: '80vw',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+        }}>
+          {exportToast}
+        </div>
+      )}
 
       {/* Toolbar */}
       <MainToolbar
@@ -86,6 +103,7 @@ export function WorkspacePage() {
         onClear={handleClear}
         onExport={handleExport}
         connected={connected}
+        hasPackets={visiblePackets.length > 0}
       />
 
       {/* Main 3-column body */}
@@ -118,7 +136,7 @@ export function WorkspacePage() {
         }
         right={
           <>
-            <span>{t('ws.buffer')}{formatSize(state.bufferBytes)} / 64 MB</span>
+            <span>{t('ws.buffer')}{formatSize(state.bufferBytes)} / {bufferMaxKb} KB</span>
             <StatusSep />
             <button
               style={{

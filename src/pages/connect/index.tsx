@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import s from './Connect.module.css';
 import { StatusBar, StatusChip } from '../../shared/ui/StatusBar';
 import { SectionHeading } from '../../shared/ui/SectionHeading';
@@ -50,17 +50,27 @@ export function ConnectPage() {
   const [testStatus, setTestStatus] = useState('');
   const [savedSerial, setSavedSerial] = useState('');
   const [savedTcp, setSavedTcp]   = useState('');
+  const timerSerial = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerTcp    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerTest   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (timerSerial.current) clearTimeout(timerSerial.current);
+    if (timerTcp.current)    clearTimeout(timerTcp.current);
+    if (timerTest.current)   clearTimeout(timerTest.current);
+  }, []);
   const [recentHosts, setRecentHosts] = useState<string[]>(() => {
     try { const v = localStorage.getItem('ws_recent_hosts'); return v ? JSON.parse(v) : []; } catch { return []; }
   });
 
   function saveSerialPreset() {
+    if (!port) return;
     const label = `${port} · ${baud} ${dataBits}${parity[0].toUpperCase()}${stopBits}`;
     setSavedSerial(t('connect.saved'));
-    setTimeout(() => setSavedSerial(''), 2000);
+    if (timerSerial.current) clearTimeout(timerSerial.current);
+    timerSerial.current = setTimeout(() => setSavedSerial(''), 2000);
     dispatch({
-      type: 'ADD_SAVED_FILTER',
-      filter: { id: Date.now().toString(), label, query: `session:${port}` },
+      type: 'ADD_CONNECTION_PRESET',
+      preset: { id: `serial-${port}`, label, kind: 'serial', port, baud, dataBits, parity, stopBits, flow },
     });
   }
 
@@ -68,10 +78,11 @@ export function ConnectPage() {
     if (!host) return;
     const label = `${host}:${tcpPort}`;
     setSavedTcp(t('connect.saved'));
-    setTimeout(() => setSavedTcp(''), 2000);
+    if (timerTcp.current) clearTimeout(timerTcp.current);
+    timerTcp.current = setTimeout(() => setSavedTcp(''), 2000);
     dispatch({
-      type: 'ADD_SAVED_FILTER',
-      filter: { id: Date.now().toString(), label, query: `session:${host}:${tcpPort}` },
+      type: 'ADD_CONNECTION_PRESET',
+      preset: { id: `tcp-${host}-${tcpPort}`, label, kind: 'tcp', host, tcpPort, tcpMode },
     });
   }
 
@@ -119,11 +130,10 @@ export function ConnectPage() {
     if (!port) return;
     setSerialLoading(true); setSerialError('');
     try {
-      const id = await api.connectSerial(port, baud);
-      const sessions = await api.getSessions();
-      dispatch({ type: 'SET_SESSIONS', sessions });
-      dispatch({ type: 'SET_ACTIVE_SESSION', id });
-      dispatch({ type: 'SET_RECEIVING', id, on: true });
+      const session = await api.connectSerial(port, baud);
+      dispatch({ type: 'ADD_SESSION', session });
+      dispatch({ type: 'SET_ACTIVE_SESSION', id: session.id });
+      dispatch({ type: 'SET_RECEIVING', id: session.id, on: true });
       dispatch({ type: 'SET_SCREEN', screen: 'workspace' });
     } catch (e: any) { setSerialError(String(e)); }
     setSerialLoading(false);
@@ -133,13 +143,12 @@ export function ConnectPage() {
     if (!host) return;
     setTcpLoading(true); setTcpError('');
     try {
-      const port = parseInt(tcpPort, 10);
-      if (isNaN(port) || port < 1 || port > 65535) { setTcpError(t('connect.portError')); setTcpLoading(false); return; }
-      const id = await api.connectTcp(host, port);
-      const sessions = await api.getSessions();
-      dispatch({ type: 'SET_SESSIONS', sessions });
-      dispatch({ type: 'SET_ACTIVE_SESSION', id });
-      dispatch({ type: 'SET_RECEIVING', id, on: true });
+      const portNum = parseInt(tcpPort, 10);
+      if (isNaN(portNum) || portNum < 1 || portNum > 65535) { setTcpError(t('connect.portError')); setTcpLoading(false); return; }
+      const session = await api.connectTcp(host, portNum);
+      dispatch({ type: 'ADD_SESSION', session });
+      dispatch({ type: 'SET_ACTIVE_SESSION', id: session.id });
+      dispatch({ type: 'SET_RECEIVING', id: session.id, on: true });
       const entry = `${host}:${tcpPort}`;
       const next = [entry, ...recentHosts.filter(h => h !== entry)].slice(0, 5);
       setRecentHosts(next);
@@ -150,14 +159,32 @@ export function ConnectPage() {
   }
 
   async function disconnectSession(id: string) {
-    await api.disconnect(id);
-    const sessions = await api.getSessions();
-    dispatch({ type: 'SET_SESSIONS', sessions });
-    if (state.activeSessionId === id) {
-      // Switch to another connected session, or null if none
-      const other = sessions.find(s => s.id !== id && s.connected);
-      dispatch({ type: 'SET_ACTIVE_SESSION', id: other?.id ?? null });
-    }
+    try {
+      await api.disconnect(id);
+    } catch { /* session may already be gone */ }
+    // REMOVE_SESSION atomically: removes session, cleans per-session state,
+    // switches activeSessionId, and restores the next session's filter/splitter
+    // in a single reducer call — avoids the intermediate state where sessions
+    // array is updated but activeSessionId still points to the removed session.
+    dispatch({ type: 'REMOVE_SESSION', id });
+  }
+
+  const serialPresets = state.connectionPresets.filter(p => p.kind === 'serial');
+  const tcpPresets    = state.connectionPresets.filter(p => p.kind === 'tcp');
+
+  function applySerialPreset(p: typeof state.connectionPresets[number]) {
+    if (p.port)     setPort(p.port);
+    if (p.baud)     setBaud(p.baud);
+    if (p.dataBits) setDataBits(p.dataBits);
+    if (p.parity)   setParity(p.parity);
+    if (p.stopBits) setStopBits(p.stopBits);
+    if (p.flow)     setFlow(p.flow);
+  }
+
+  function applyTcpPreset(p: typeof state.connectionPresets[number]) {
+    if (p.host)    setHost(p.host);
+    if (p.tcpPort) setTcpPort(p.tcpPort);
+    if (p.tcpMode) setTcpMode(p.tcpMode as TcpMode);
   }
 
   const portParams = `${baud} · ${dataBits}${parity[0].toUpperCase()}${stopBits}`;
@@ -322,12 +349,27 @@ export function ConnectPage() {
 
           {serialError && <div className={s.error}>{serialError}</div>}
 
+          {serialPresets.length > 0 && (
+            <div className={s.savedConns}>
+              <span className={s.savedConnsLabel}>{t('connect.savedConnections')}</span>
+              <div className={s.savedConnsList}>
+                {serialPresets.map(p => (
+                  <div key={p.id} className={s.savedConnChip} onClick={() => applySerialPreset(p)} title={t('connect.clickToApply')}>
+                    <span className={s.savedConnKind}>S</span>
+                    <span className={s.savedConnLabel}>{p.label}</span>
+                    <button className={s.savedConnRemove} onClick={e => { e.stopPropagation(); dispatch({ type: 'REMOVE_CONNECTION_PRESET', id: p.id }); }}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className={s.formActions}>
-            <Button variant="success" onClick={connectSerial} disabled={serialLoading || !port}>
+            <Button variant="success" onClick={connectSerial} disabled={serialLoading || !port || !ports.includes(port)}>
               <span className={s.pulseDot} />
               {serialLoading ? t('connect.connecting') : t('connect.connectBtn')}
             </Button>
-            <Button size="sm" onClick={saveSerialPreset}>
+            <Button size="sm" onClick={saveSerialPreset} disabled={!port}>
               {savedSerial || t('connect.savePreset')}
             </Button>
           </div>
@@ -386,7 +428,7 @@ export function ConnectPage() {
                 value={tcpPort}
                 onChange={e => setTcpPort(e.target.value)}
                 placeholder={t('connect.portPlaceholder')}
-                style={{ flex: 1 }}
+                style={{ flex: 1, borderColor: tcpPort && (isNaN(parseInt(tcpPort, 10)) || parseInt(tcpPort, 10) < 1 || parseInt(tcpPort, 10) > 65535) ? 'var(--err, red)' : '' }}
               />
             </div>
             {recentHosts.length > 0 && (
@@ -460,6 +502,21 @@ export function ConnectPage() {
 
           {tcpError && <div className={s.error}>{tcpError}</div>}
 
+          {tcpPresets.length > 0 && (
+            <div className={s.savedConns}>
+              <span className={s.savedConnsLabel}>{t('connect.savedConnections')}</span>
+              <div className={s.savedConnsList}>
+                {tcpPresets.map(p => (
+                  <div key={p.id} className={s.savedConnChip} onClick={() => applyTcpPreset(p)} title={t('connect.clickToApply')}>
+                    <span className={s.savedConnKind}>T</span>
+                    <span className={s.savedConnLabel}>{p.label}</span>
+                    <button className={s.savedConnRemove} onClick={e => { e.stopPropagation(); dispatch({ type: 'REMOVE_CONNECTION_PRESET', id: p.id }); }}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className={s.formActions}>
             <Button variant="success" onClick={connectTcp} disabled={tcpLoading || !host}>
               <span className={s.pulseDot} />
@@ -470,17 +527,23 @@ export function ConnectPage() {
               setTestStatus(t('connect.testing'));
               try {
                 const testPort = parseInt(tcpPort, 10);
-                if (isNaN(testPort) || testPort < 1 || testPort > 65535) { setTestStatus(t('connect.portNumError')); setTimeout(() => setTestStatus(''), 3000); return; }
-                const id = await api.connectTcp(host, testPort);
-                await api.disconnect(id);
-                // Add to blocklist so it never appears as a real session
-                dispatch({ type: 'REMOVE_SESSION', id });
+                if (isNaN(testPort) || testPort < 1 || testPort > 65535) {
+                  setTestStatus(t('connect.portNumError'));
+                  if (timerTest.current) clearTimeout(timerTest.current);
+                  timerTest.current = setTimeout(() => setTestStatus(''), 3000);
+                  return;
+                }
+                const testSession = await api.connectTcp(host, testPort);
+                await api.disconnect(testSession.id);
+                // Remove immediately so it never appears as a real session
+                dispatch({ type: 'REMOVE_SESSION', id: testSession.id });
                 setTestStatus(t('connect.testOk'));
               } catch (e: any) {
                 const msg = String(e).split(':').pop()?.trim() ?? String(e);
                 setTestStatus(`${t('connect.testFailed')}${msg}`);
               }
-              setTimeout(() => setTestStatus(''), 3000);
+              if (timerTest.current) clearTimeout(timerTest.current);
+              timerTest.current = setTimeout(() => setTestStatus(''), 3000);
             }}>
               {t('connect.test')}
             </Button>

@@ -19,7 +19,7 @@ pub async fn connect_serial(
     state: State<'_, SharedState>,
     port: String,
     baud: u32,
-) -> Result<String, String> {
+) -> Result<SessionInfo, String> {
     let state_arc = Arc::clone(&state);
     let app2 = app.clone();
     let session_id = port.clone();
@@ -46,17 +46,18 @@ pub async fn connect_serial(
         }
     })?;
 
-    let mut st = state.lock();
-    st.serial_tx = Some(conn.tx);
-    st.sessions.insert(port.clone(), SessionInfo {
+    let session = SessionInfo {
         id: port.clone(),
         name: port.clone(),
         kind: "serial".into(),
         connected: true,
         tx_bytes: 0,
         rx_bytes: 0,
-    });
-    Ok(port)
+    };
+    let mut st = state.lock();
+    st.serial_tx = Some(conn.tx);
+    st.sessions.insert(port.clone(), session.clone());
+    Ok(session)
 }
 
 #[tauri::command]
@@ -65,7 +66,7 @@ pub async fn connect_tcp(
     state: State<'_, SharedState>,
     host: String,
     port: u16,
-) -> Result<String, String> {
+) -> Result<SessionInfo, String> {
     let state_arc = Arc::clone(&state);
     let app2 = app.clone();
     let session_id = format!("{host}:{port}");
@@ -92,17 +93,18 @@ pub async fn connect_tcp(
         }
     }).await?;
 
-    let mut st = state.lock();
-    st.socket_tx = Some(conn.tx);
-    st.sessions.insert(session_id.clone(), SessionInfo {
+    let session = SessionInfo {
         id: session_id.clone(),
         name: session_id.clone(),
         kind: "tcp".into(),
         connected: true,
         tx_bytes: 0,
         rx_bytes: 0,
-    });
-    Ok(session_id)
+    };
+    let mut st = state.lock();
+    st.socket_tx = Some(conn.tx);
+    st.sessions.insert(session_id.clone(), session.clone());
+    Ok(session)
 }
 
 #[tauri::command]

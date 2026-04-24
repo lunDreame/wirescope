@@ -58,22 +58,30 @@ export function SplitterPage() {
     { value: 'regex',        label: t('splitter.regex') },
   ] as const;
   const sessionPackets = useSessionPackets();
-  const [cfg, setCfg] = useState<SplitterConfig>(state.splitter ?? DEFAULT_CONFIG);
-  const [sofHex, setSofHex] = useState(hexStr(cfg.sof));
-  const [eofHex, setEofHex] = useState(hexStr(cfg.eof));
-  const [saved, setSaved] = useState(true);
-  const [previewPackets, setPreviewPackets] = useState<number[][]>([]);
+  // cfg lives in the global store so edits survive tab navigation
+  const cfg: SplitterConfig = state.splitterDraft ?? state.splitter ?? DEFAULT_CONFIG;
+  const saved = state.splitterDraft === null;
+  const [sofHex, setSofHex] = useState(() => hexStr(cfg.sof));
+  const [eofHex, setEofHex] = useState(() => hexStr(cfg.eof));
   // gap unit: display in µs / ms / s, internally always stored as ms
   const [gapUnit, setGapUnit] = useState<'µs' | 'ms' | 's'>('ms');
 
+  // When the active session changes, the applied splitter also changes.
+  // Sync the hex text inputs to reflect the new session's values.
+  // Only sync when there's no pending draft (user hasn't started editing yet).
+  const activeSessionId = state.activeSessionId;
   useEffect(() => {
-    setPreviewPackets(sessionPackets.slice(-8).map(p => p.bytes));
-  }, [sessionPackets]);
+    if (state.splitterDraft === null) {
+      setSofHex(hexStr(state.splitter.sof));
+      setEofHex(hexStr(state.splitter.eof));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionId, state.splitter]);
+
+  const previewPackets = sessionPackets.slice(-8).map(p => p.bytes);
 
   function update(patch: Partial<SplitterConfig>) {
-    const hasChange = Object.entries(patch).some(([k, v]) => (cfg as unknown as Record<string, unknown>)[k] !== v);
-    setCfg(prev => ({ ...prev, ...patch }));
-    if (hasChange) setSaved(false);
+    dispatch({ type: 'SET_SPLITTER_DRAFT', config: { ...cfg, ...patch } });
   }
 
   async function apply() {
@@ -82,10 +90,8 @@ export function SplitterPage() {
       sof: parseHexInput(sofHex),
       eof: parseHexInput(eofHex),
     };
-    setCfg(next);
     await api.setSplitter(next);
-    dispatch({ type: 'SET_SPLITTER', config: next });
-    setSaved(true);
+    dispatch({ type: 'SET_SPLITTER', config: next }); // also clears splitterDraft
   }
 
   const sofDisplay = sofHex || t('splitter.none');
@@ -128,7 +134,7 @@ export function SplitterPage() {
                   <input
                     className={s.inp}
                     value={sofHex}
-                    onChange={e => { setSofHex(e.target.value); setSaved(false); }}
+                    onChange={e => { setSofHex(e.target.value); dispatch({ type: 'SET_SPLITTER_DRAFT', config: { ...cfg, sof: parseHexInput(e.target.value) } }); }}
                     placeholder={t('splitter.sofPlaceholder')}
                     spellCheck={false}
                   />
@@ -138,7 +144,7 @@ export function SplitterPage() {
                   <input
                     className={s.inp}
                     value={eofHex}
-                    onChange={e => { setEofHex(e.target.value); setSaved(false); }}
+                    onChange={e => { setEofHex(e.target.value); dispatch({ type: 'SET_SPLITTER_DRAFT', config: { ...cfg, eof: parseHexInput(e.target.value) } }); }}
                     placeholder={t('splitter.eofPlaceholder')}
                     spellCheck={false}
                   />
@@ -160,7 +166,7 @@ export function SplitterPage() {
                 <div className={s.field}>
                   <label className={s.label}>{t('splitter.sofOptional')}</label>
                   <input className={s.inp} value={sofHex}
-                    onChange={e => { setSofHex(e.target.value); setSaved(false); }}
+                    onChange={e => { setSofHex(e.target.value); dispatch({ type: 'SET_SPLITTER_DRAFT', config: { ...cfg, sof: parseHexInput(e.target.value) } }); }}
                     placeholder={t('splitter.skipPlaceholder')} />
                 </div>
                 <div className={s.field}>
@@ -365,12 +371,11 @@ export function SplitterPage() {
               {saved ? t('splitter.applied') : t('splitter.apply')}
             </Button>
             <Button onClick={async () => {
-              setCfg(DEFAULT_CONFIG);
+              if (!window.confirm(t('splitter.resetConfirm'))) return;
               setSofHex(hexStr(DEFAULT_CONFIG.sof));
               setEofHex(hexStr(DEFAULT_CONFIG.eof));
-              setSaved(true);
               await api.setSplitter(DEFAULT_CONFIG);
-              dispatch({ type: 'SET_SPLITTER', config: DEFAULT_CONFIG });
+              dispatch({ type: 'SET_SPLITTER', config: DEFAULT_CONFIG }); // also clears splitterDraft
             }}>{t('splitter.reset')}</Button>
           </div>
         </div>

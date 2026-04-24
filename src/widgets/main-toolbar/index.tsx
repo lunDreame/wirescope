@@ -12,9 +12,10 @@ interface Props {
   onClear: () => void;
   onExport: () => void;
   connected: boolean;
+  hasPackets: boolean;
 }
 
-export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, connected }: Props) {
+export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, connected, hasPackets }: Props) {
   const { state, dispatch } = useApp();
   const { settings, filter } = state;
   const t = useT();
@@ -136,7 +137,7 @@ export function MainToolbar({ isReceiving, onToggleReceive, onClear, onExport, c
         </svg>
         {t('toolbar.clear')}
       </button>
-      <button className={s.tg} onClick={onExport}>
+      <button className={s.tg} onClick={onExport} disabled={!hasPackets} title={!hasPackets ? t('toolbar.noPacketsToExport') : undefined}>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M6 2v6M3 6l3 3 3-3M2 10h8"/>
         </svg>

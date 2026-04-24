@@ -91,4 +91,3 @@ jobs:
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: false
-          uploadUpdaterJson: true
