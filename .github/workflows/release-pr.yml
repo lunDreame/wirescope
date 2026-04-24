@@ -34,7 +34,7 @@ jobs:
 
           PR_BODY="Merges \`main\` into \`release\` to trigger the build workflow.
 
-> **Merging this PR will publish WireScope v${VERSION} to GitHub Releases.**"
+          > **Merging this PR will publish WireScope v${VERSION} to GitHub Releases.**"
 
           if [ -z "$PR_NUMBER" ]; then
             gh label create release --color 0075ca --description "Release PR" 2>/dev/null || true
