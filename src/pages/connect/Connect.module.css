@@ -283,3 +283,79 @@
   color: var(--ok);
   font-family: var(--mono);
 }
+
+/* ── Saved Connections ──────────────────────────── */
+.savedConns {
+  margin: 4px 0 8px;
+}
+
+.savedConnsLabel {
+  font-size: 10.5px;
+  color: var(--ink-2);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.savedConnsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.savedConnChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 5px;
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--ink-1);
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.savedConnChip:hover {
+  border-color: var(--brand);
+  background: oklch(from var(--brand) l c h / 0.08);
+}
+
+.savedConnKind {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: var(--brand);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.savedConnLabel {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.savedConnRemove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-2);
+  padding: 0 1px;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+  border-radius: 3px;
+}
+
+.savedConnRemove:hover {
+  color: var(--err);
+  background: oklch(from var(--err) l c h / 0.12);
+}
+

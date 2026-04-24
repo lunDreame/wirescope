@@ -83,6 +83,23 @@ export interface TxPreset {
   active:  boolean;
 }
 
+export interface ConnectionPreset {
+  id:       string;
+  label:    string;
+  kind:     'serial' | 'tcp';
+  // serial fields
+  port?:     string;
+  baud?:     number;
+  dataBits?: number;
+  parity?:   string;
+  stopBits?: string;
+  flow?:     string;
+  // tcp fields
+  host?:    string;
+  tcpPort?: string;
+  tcpMode?: string;
+}
+
 export interface CustomChecksum {
   id:    string;
   name:  string;

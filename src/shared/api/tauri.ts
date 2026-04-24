@@ -13,10 +13,10 @@ export const windowControls = {
 
 // ── Connection ────────────────────────────────────────────────
 export const connectSerial = (port: string, baud: number) =>
-  invoke<string>('connect_serial', { port, baud });
+  invoke<SessionInfo>('connect_serial', { port, baud });
 
 export const connectTcp = (host: string, port: number) =>
-  invoke<string>('connect_tcp', { host, port });
+  invoke<SessionInfo>('connect_tcp', { host, port });
 
 export const disconnect = (sessionId: string) =>
   invoke<void>('disconnect', { sessionId });

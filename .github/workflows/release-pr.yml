@@ -13,10 +13,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
       - name: Ensure release branch exists
         env:
@@ -28,25 +25,29 @@ jobs:
             git checkout main
           fi
 
-      - name: Ensure release label exists
+      - name: Create or update release PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh label create release --color 0075ca --description "Release PR" 2>/dev/null || true
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          PR_NUMBER=$(gh pr list --base release --head main --state open --json number --jq '.[0].number // empty')
 
-      - name: Create PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          EXISTING=$(gh pr list --base release --head main --state open --json number --jq length)
-          if [ "$EXISTING" -eq 0 ]; then
-            VERSION=$(node -p "require('./package.json').version")
+          PR_BODY="Merges \`main\` into \`release\` to trigger the build workflow.
+
+          > **Merging this PR will publish WireScope v${VERSION} to GitHub Releases.**"
+
+          if [ -z "$PR_NUMBER" ]; then
+            gh label create release --color 0075ca --description "Release PR" 2>/dev/null || true
             gh pr create \
               --base release \
               --head main \
-              --title "Release v$VERSION" \
-              --body "Merge changes from main into release." \
+              --title "release: v${VERSION}" \
+              --body "$PR_BODY" \
               --label release
+            echo "Created: release v${VERSION}"
           else
-            echo "Release PR already open — skipping."
+            gh pr edit "$PR_NUMBER" \
+              --title "release: v${VERSION}" \
+              --body "$PR_BODY"
+            echo "Updated PR #${PR_NUMBER}: release v${VERSION}"
           fi

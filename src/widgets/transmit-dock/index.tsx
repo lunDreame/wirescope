@@ -42,6 +42,7 @@ export function TransmitDock() {
   const [quickFmt, setQuickFmt] = useState<'hex' | 'ascii'>('hex');
   const [quickError, setQuickError] = useState('');
   const [addingPreset, setAddingPreset] = useState(false);
+  const [newPresetNameError, setNewPresetNameError] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
   const [newPresetBytes, setNewPresetBytes] = useState('');
   const [newPresetMode, setNewPresetMode] = useState<TxPreset['mode']>('single');
@@ -150,7 +151,9 @@ export function TransmitDock() {
   }
 
   function addPreset() {
-    if (!newPresetName.trim() || !newPresetBytes.trim()) return;
+    if (!newPresetName.trim()) { setNewPresetNameError(true); return; }
+    if (!newPresetBytes.trim()) return;
+    setNewPresetNameError(false);
     const preset: TxPreset = {
       id: Date.now().toString(),
       name: newPresetName.trim(),
@@ -162,7 +165,7 @@ export function TransmitDock() {
       active: false,
     };
     dispatch({ type: 'ADD_TX_PRESET', preset });
-    setNewPresetName(''); setNewPresetBytes(''); setNewPresetMode('single'); setNewPresetFmt('hex'); setNewPresetCount(0);
+    setNewPresetName(''); setNewPresetBytes(''); setNewPresetMode('single'); setNewPresetFmt('hex'); setNewPresetCount(0); setNewPresetNameError(false);
     setAddingPreset(false);
   }
 
@@ -248,8 +251,9 @@ export function TransmitDock() {
               {addingPreset ? (
                 <div className={s.addPresetForm}>
                   <input className={s.addInp} value={newPresetName}
-                    onChange={e => setNewPresetName(e.target.value)}
-                    placeholder={t('dock.presetName')} autoFocus />
+                    onChange={e => { setNewPresetName(e.target.value); if (e.target.value.trim()) setNewPresetNameError(false); }}
+                    placeholder={t('dock.presetName')} autoFocus
+                    style={newPresetNameError ? { borderColor: 'var(--err, red)' } : undefined} />
                   <input className={s.addInp} value={newPresetBytes}
                     onChange={e => setNewPresetBytes(e.target.value)}
                     placeholder={newPresetFmt === 'ascii' ? t('dock.asciiPlaceholder') : t('dock.presetBytes')} spellCheck={false} />
@@ -517,10 +521,10 @@ function ScriptTab({ activeId, connected, dispatch }: {
     '# 명령어: send HEX | sleep MS | log 메시지',
     '#',
     '# 예시:',
-    '# send AA 55 01 00        # 패킷 전송',
+    '# send 68 01 00 16        # 패킷 전송',
     '# sleep 200               # 200ms 대기',
-    '# send AA 55 02 00        # 두 번째 패킷',
-    '# log 시퀀스 완료          # 콘솔에 메시지 출력',
+    '# send 68 02 00 16        # 두 번째 패킷',
+    '# log 시퀀스 완료            # 콘솔에 메시지 출력',
     '',
   ].join('\n');
 

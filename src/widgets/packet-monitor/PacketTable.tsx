@@ -20,6 +20,7 @@ export function PacketTable() {
 
   const select = useCallback((id: number) => {
     dispatch({ type: 'SELECT_PACKET', id });
+    dispatch({ type: 'SET_INSPECTOR_TAB', tab: 'detail' });
   }, [dispatch]);
 
   const sofHex = splitter.sof.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');

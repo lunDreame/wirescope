@@ -1,10 +1,10 @@
 import React, {
   createContext, useContext, useReducer,
-  useEffect, useRef, ReactNode
+  useEffect, useRef, useMemo, ReactNode
 } from 'react';
 import type {
   Packet, SessionInfo, SplitterConfig, Screen,
-  FilterState, AppSettings, TxPreset, SavedFilter, CustomChecksum, ByteFormat,
+  FilterState, AppSettings, TxPreset, SavedFilter, CustomChecksum, ByteFormat, ConnectionPreset,
 } from '../shared/types';
 import * as api from '../shared/api/tauri';
 
@@ -15,6 +15,7 @@ interface AppState {
   sessions:         SessionInfo[];
   activeSessionId:  string | null;
   splitter:         SplitterConfig;
+  splitterDraft:    SplitterConfig | null;  // unsaved edits in SplitterPage; null = no pending changes
   screen:           Screen;
   selectedPacketId: number | null;
   filter:           FilterState;
@@ -25,14 +26,15 @@ interface AppState {
   inspectorTab:     'detail' | 'analysis' | 'graph' | 'notes';
   bufferBytes:        number;
   sessionReceiving:   Record<string, boolean>;
-  removedSessionIds:  string[];  // kept for compat but no longer used to filter SET_SESSIONS
   packetNotes:        Record<string, string>;  // key = `${session_id}:${packet_id}`
   customChecksums:    CustomChecksum[];
+  connectionPresets:  ConnectionPreset[];
+  filterChangedAt:    number | null;  // set when session switch changes the active filter
   // Per-session state backing stores — saved on session switch, restored on session restore
   sessionFilters:     Record<string, FilterState>;
   sessionSplitters:   Record<string, SplitterConfig>;
   sessionByteFormats: Record<string, ByteFormat>;
-  consoleLog:       { ts: number; text: string; kind: 'info' | 'tx' | 'rx' | 'err'; session_id?: string }[];
+  consoleLog:       { ts: number; text: string; kind: 'info' | 'tx' | 'err'; session_id?: string }[];
 }
 
 // ── Actions ───────────────────────────────────────────────────
@@ -40,7 +42,7 @@ interface AppState {
 type Action =
   | { type: 'ADD_PACKET'; packet: Packet }
   | { type: 'SET_PACKETS'; packets: Packet[] }
-  | { type: 'SET_SESSIONS'; sessions: SessionInfo[] }
+  | { type: 'ADD_SESSION'; session: SessionInfo }
   | { type: 'SET_ACTIVE_SESSION'; id: string | null }
   | { type: 'SET_SPLITTER'; config: SplitterConfig }
   | { type: 'SET_SCREEN'; screen: Screen }
@@ -62,6 +64,9 @@ type Action =
   | { type: 'ADD_CUSTOM_CHECKSUM'; checksum: CustomChecksum }
   | { type: 'UPDATE_CUSTOM_CHECKSUM'; checksum: CustomChecksum }
   | { type: 'REMOVE_CUSTOM_CHECKSUM'; id: string }
+  | { type: 'ADD_CONNECTION_PRESET'; preset: ConnectionPreset }
+  | { type: 'REMOVE_CONNECTION_PRESET'; id: string }
+  | { type: 'SET_SPLITTER_DRAFT'; config: SplitterConfig | null }
   | { type: 'LOG_CONSOLE'; entry: AppState['consoleLog'][number] }
   | { type: 'CLEAR_CONSOLE'; id?: string };
 
@@ -114,7 +119,9 @@ function loadSplitter(): SplitterConfig {
 function loadTxPresets(): TxPreset[] {
   try {
     const s = localStorage.getItem('ws_tx_presets');
-    return s ? JSON.parse(s) : [];
+    // Always reset `active` to false on load — repeat timers don't survive restart
+    const presets: TxPreset[] = s ? JSON.parse(s) : [];
+    return presets.map(p => ({ ...p, active: false }));
   } catch { return []; }
 }
 
@@ -132,6 +139,20 @@ function loadCustomChecksums(): CustomChecksum[] {
   } catch { return []; }
 }
 
+function loadConnectionPresets(): ConnectionPreset[] {
+  try {
+    const s = localStorage.getItem('ws_connection_presets');
+    return s ? JSON.parse(s) : [];
+  } catch { return []; }
+}
+
+function loadPacketNotes(): Record<string, string> {
+  try {
+    const s = localStorage.getItem('ws_packet_notes');
+    return s ? JSON.parse(s) : {};
+  } catch { return {}; }
+}
+
 function detectLanguage(): 'ko' | 'en' {
   const lang = (navigator.language ?? '').toLowerCase();
   return lang.startsWith('ko') ? 'ko' : 'en';
@@ -147,8 +168,7 @@ const defaultSettings: AppSettings = {
   language:    detectLanguage(),
 };
 
-// Clear stale removed-sessions list — it is no longer used to filter SET_SESSIONS,
-// and old entries would have caused new connections to be invisible after a session removal.
+// Clear legacy localStorage key from an older schema.
 try { localStorage.removeItem('ws_removed_sessions'); } catch {}
 
 const initialState: AppState = {
@@ -156,6 +176,7 @@ const initialState: AppState = {
   sessions:         [],
   activeSessionId:  null,
   splitter:         loadSplitter(),
+  splitterDraft:    null,
   screen:           'workspace',
   selectedPacketId: null,
   filter:           defaultFilter,
@@ -166,9 +187,10 @@ const initialState: AppState = {
   inspectorTab:  'detail',
   bufferBytes:       0,
   sessionReceiving:  {},
-  removedSessionIds: [], // no longer persisted — SET_SESSIONS accepts full backend list
-  packetNotes:       {},
+  packetNotes:       loadPacketNotes(),
   customChecksums:   loadCustomChecksums(),
+  connectionPresets: loadConnectionPresets(),
+  filterChangedAt:   null,
   sessionFilters:    {},
   sessionSplitters:  {},
   sessionByteFormats:{},
@@ -187,18 +209,7 @@ function reducer(state: AppState, action: Action): AppState {
       const packets = state.packets.length >= MAX
         ? [...state.packets.slice(-MAX + 1), action.packet]
         : [...state.packets, action.packet];
-      const logEntry: AppState['consoleLog'][number] = {
-        ts: action.packet.timestamp_ms,
-        text: `${action.packet.direction} ${action.packet.bytes.length}B · ${action.packet.bytes.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ')}`,
-        kind: action.packet.direction === 'TX' ? 'tx' : 'rx',
-        session_id: action.packet.session_id,
-      };
-      return {
-        ...state,
-        packets,
-        bufferBytes: state.bufferBytes + action.packet.bytes.length,
-        consoleLog: [...state.consoleLog.slice(-500), logEntry],
-      };
+      return { ...state, packets, bufferBytes: state.bufferBytes + action.packet.bytes.length };
     }
     case 'SET_PACKETS':
       return { ...state, packets: action.packets, bufferBytes: action.packets.reduce((s, p) => s + p.bytes.length, 0) };
@@ -220,12 +231,16 @@ function reducer(state: AppState, action: Action): AppState {
             Object.entries(state.packetNotes).filter(([key]) => !key.startsWith(`${action.id}:`))
           )
         : {};
+      try { localStorage.setItem('ws_packet_notes', JSON.stringify(packetNotes)); } catch {}
       return { ...state, packets, selectedPacketId, packetNotes, bufferBytes: packets.reduce((a, p) => a + p.bytes.length, 0) };
     }
-    case 'SET_SESSIONS': {
-      // Always accept the full backend list — REMOVE_SESSION already removes from state.sessions
-      // directly, and there is no background push that could re-add them.
-      return { ...state, sessions: action.sessions };
+    case 'ADD_SESSION': {
+      // Upsert: replace existing session with same id or append
+      const sessions = [
+        ...state.sessions.filter(s => s.id !== action.session.id),
+        action.session,
+      ];
+      return { ...state, sessions };
     }
     case 'SET_ACTIVE_SESSION': {
       const oldId = state.activeSessionId;
@@ -250,11 +265,15 @@ function reducer(state: AppState, action: Action): AppState {
       if (newId && sessionSplitters[newId]) {
         try { localStorage.setItem('ws_splitter', JSON.stringify(splitter)); } catch {}
       }
+      // Detect if the filter actually changed so the UI can notify the user
+      const filterChanged = JSON.stringify(filter) !== JSON.stringify(state.filter);
       return {
         ...state,
         activeSessionId: newId,
         filter,
         splitter,
+        splitterDraft: null,  // discard unsaved splitter edits when switching sessions
+        filterChangedAt: filterChanged ? Date.now() : state.filterChangedAt,
         settings: { ...state.settings, byteFormat },
         sessionFilters,
         sessionSplitters,
@@ -266,8 +285,10 @@ function reducer(state: AppState, action: Action): AppState {
       const sessionSplitters = state.activeSessionId
         ? { ...state.sessionSplitters, [state.activeSessionId]: action.config }
         : state.sessionSplitters;
-      return { ...state, splitter: action.config, sessionSplitters };
+      return { ...state, splitter: action.config, splitterDraft: null, sessionSplitters };
     }
+    case 'SET_SPLITTER_DRAFT':
+      return { ...state, splitterDraft: action.config };
     case 'SET_SCREEN':
       return { ...state, screen: action.screen };
     case 'SELECT_PACKET':
@@ -346,6 +367,11 @@ function reducer(state: AppState, action: Action): AppState {
       const { [action.id]: _rf, ...sessionFilters }     = state.sessionFilters;
       const { [action.id]: _rs, ...sessionSplitters }   = state.sessionSplitters;
       const { [action.id]: _rb, ...sessionByteFormats } = state.sessionByteFormats;
+      // Clean up packet notes for the removed session and persist
+      const packetNotes = Object.fromEntries(
+        Object.entries(state.packetNotes).filter(([key]) => !key.startsWith(`${action.id}:`))
+      );
+      try { localStorage.setItem('ws_packet_notes', JSON.stringify(packetNotes)); } catch {}
       return {
         ...state,
         sessions,
@@ -360,17 +386,16 @@ function reducer(state: AppState, action: Action): AppState {
         sessionFilters,
         sessionSplitters,
         sessionByteFormats,
-        removedSessionIds: (() => {
-          const ids = [...state.removedSessionIds, action.id];
-          try { localStorage.setItem('ws_removed_sessions', JSON.stringify(ids)); } catch {}
-          return ids;
-        })(),
+        packetNotes,
       };
     }
     case 'SET_RECEIVING':
       return { ...state, sessionReceiving: { ...state.sessionReceiving, [action.id]: action.on } };
-    case 'SET_PACKET_NOTE':
-      return { ...state, packetNotes: { ...state.packetNotes, [action.packetKey]: action.note } };
+    case 'SET_PACKET_NOTE': {
+      const packetNotes = { ...state.packetNotes, [action.packetKey]: action.note };
+      try { localStorage.setItem('ws_packet_notes', JSON.stringify(packetNotes)); } catch {}
+      return { ...state, packetNotes };
+    }
     case 'ADD_CUSTOM_CHECKSUM': {
       const customChecksums = [...state.customChecksums, action.checksum];
       try { localStorage.setItem('ws_custom_checksums', JSON.stringify(customChecksums)); } catch {}
@@ -385,6 +410,19 @@ function reducer(state: AppState, action: Action): AppState {
       const customChecksums = state.customChecksums.filter(c => c.id !== action.id);
       try { localStorage.setItem('ws_custom_checksums', JSON.stringify(customChecksums)); } catch {}
       return { ...state, customChecksums };
+    }
+    case 'ADD_CONNECTION_PRESET': {
+      const connectionPresets = [
+        ...state.connectionPresets.filter(p => p.id !== action.preset.id),
+        action.preset,
+      ];
+      try { localStorage.setItem('ws_connection_presets', JSON.stringify(connectionPresets)); } catch {}
+      return { ...state, connectionPresets };
+    }
+    case 'REMOVE_CONNECTION_PRESET': {
+      const connectionPresets = state.connectionPresets.filter(p => p.id !== action.id);
+      try { localStorage.setItem('ws_connection_presets', JSON.stringify(connectionPresets)); } catch {}
+      return { ...state, connectionPresets };
     }
     case 'LOG_CONSOLE':
       return { ...state, consoleLog: [...state.consoleLog.slice(-500), action.entry] };
@@ -412,6 +450,8 @@ const Ctx = createContext<CtxValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  // stateRef lets the async onPacket callback read current state without being a stale closure.
+  // The callback is registered once ([] deps), so it must not close over state directly.
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
 
@@ -441,20 +481,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   }, [state.settings.accentHue]);
 
+  // Terminate Web Workers for removed custom checksums
+  useEffect(() => {
+    const activeIds = new Set(state.customChecksums.map(c => c.id));
+    for (const [csId, entry] of _csWorkers) {
+      if (!activeIds.has(csId)) {
+        entry.worker.terminate();
+        for (const [, { resolve, timer }] of entry.pending) { clearTimeout(timer); resolve(null); }
+        _csWorkers.delete(csId);
+      }
+    }
+  }, [state.customChecksums]);
+
   // Listen for incoming packets + evaluate trigger presets
   useEffect(() => {
     let cleanup: (() => void) | null = null;
     let cancelled = false;
 
-    api.onPacket(rawPkt => {
-      // For custom checksum algorithms (unknown to Rust), compute checksum_ok in JS
+    api.onPacket(async rawPkt => {
+      // For custom checksum algorithms (unknown to Rust), compute checksum_ok via Web Worker
       const { txPresets, activeSessionId, splitter, customChecksums } = stateRef.current;
       let pkt = rawPkt;
       if (splitter.checksum_algorithm.startsWith('custom:')) {
         const csId = splitter.checksum_algorithm.slice(7);
         const cs = customChecksums.find(c => c.id === csId);
         if (cs) {
-          pkt = { ...rawPkt, checksum_ok: evalCustomChecksumOk(rawPkt.bytes, cs.code, splitter) };
+          pkt = { ...rawPkt, checksum_ok: await evalCustomChecksumOk(rawPkt.bytes, cs.code, csId, splitter) };
         }
       }
       dispatch({ type: 'ADD_PACKET', packet: pkt });
@@ -491,9 +543,96 @@ export function useApp() {
   return ctx;
 }
 
-// ── Custom checksum JS evaluator ─────────────────────────────
+// ── Custom checksum Web Worker pool ──────────────────────────
 
-function evalCustomChecksumOk(bytes: number[], code: string, splitter: SplitterConfig): boolean {
+interface WorkerEntry {
+  worker:  Worker;
+  code:    string;
+  ready:   boolean;
+  nextId:  number;
+  pending: Map<number, { resolve: (n: number | null) => void; timer: ReturnType<typeof setTimeout> }>;
+  queue:   Array<{ bytes: number[]; resolve: (n: number | null) => void }>;
+}
+
+const _csWorkers = new Map<string, WorkerEntry>();
+
+function _getOrCreateWorker(csId: string, code: string): WorkerEntry {
+  const existing = _csWorkers.get(csId);
+  if (existing && existing.code === code) return existing;
+
+  // Code changed or first time — terminate old worker and create fresh one
+  if (existing) {
+    existing.worker.terminate();
+    for (const [, { resolve, timer }] of existing.pending) { clearTimeout(timer); resolve(null); }
+  }
+
+  const entry: WorkerEntry = {
+    worker:  new Worker(new URL('../shared/workers/checksumWorker.ts', import.meta.url), { type: 'module' }),
+    code, ready: false, nextId: 0, pending: new Map(), queue: [],
+  };
+
+  entry.worker.onmessage = (e: MessageEvent) => {
+    const msg = e.data;
+    if (msg.type === 'ready') {
+      entry.ready = true;
+      for (const { bytes, resolve } of entry.queue) _dispatch(csId, entry, bytes, resolve);
+      entry.queue = [];
+    } else if (msg.type === 'result') {
+      const p = entry.pending.get(msg.id);
+      if (p) { clearTimeout(p.timer); entry.pending.delete(msg.id); p.resolve(msg.result); }
+    } else if (msg.type === 'runError') {
+      const p = entry.pending.get(msg.id);
+      if (p) { clearTimeout(p.timer); entry.pending.delete(msg.id); p.resolve(null); }
+    } else if (msg.type === 'initError') {
+      // User code has a syntax error — drain pending and queue, remove from cache
+      for (const [, { resolve, timer }] of entry.pending) { clearTimeout(timer); resolve(null); }
+      entry.pending.clear();
+      for (const { resolve } of entry.queue) resolve(null);
+      entry.queue = [];
+      entry.worker.terminate();
+      _csWorkers.delete(csId);
+    }
+  };
+
+  entry.worker.onerror = () => {
+    for (const [, { resolve, timer }] of entry.pending) { clearTimeout(timer); resolve(null); }
+    entry.pending.clear();
+    for (const { resolve } of entry.queue) resolve(null);
+    entry.queue = [];
+    _csWorkers.delete(csId);
+  };
+
+  entry.worker.postMessage({ type: 'init', code });
+  _csWorkers.set(csId, entry);
+  return entry;
+}
+
+function _dispatch(csId: string, entry: WorkerEntry, bytes: number[], resolve: (n: number | null) => void) {
+  const id = entry.nextId++;
+  const timer = setTimeout(() => {
+    // Worker hung (likely infinite loop) — terminate and remove from cache
+    entry.pending.delete(id);
+    if (_csWorkers.get(csId) === entry) _csWorkers.delete(csId);
+    entry.worker.terminate();
+    resolve(null);
+  }, 500);
+  entry.pending.set(id, { resolve, timer });
+  entry.worker.postMessage({ type: 'run', id, bytes });
+}
+
+async function _runInWorker(csId: string, code: string, data: number[]): Promise<number | null> {
+  const entry = _getOrCreateWorker(csId, code);
+  return new Promise<number | null>(resolve => {
+    if (entry.ready) _dispatch(csId, entry, data, resolve);
+    else entry.queue.push({ bytes: data, resolve });
+  });
+}
+
+// ── Custom checksum evaluator (async, Worker-backed) ──────────
+
+async function evalCustomChecksumOk(
+  bytes: number[], code: string, csId: string, splitter: SplitterConfig
+): Promise<boolean> {
   try {
     const n = bytes.length;
     const dataStart = splitter.checksum_exclude_sof ? Math.min(splitter.sof.length, n) : 0;
@@ -505,10 +644,8 @@ function evalCustomChecksumOk(bytes: number[], code: string, splitter: SplitterC
     const expected = bytes.slice(csStart, csStart + splitter.checksum_size);
     if (expected.length < splitter.checksum_size) return false;
 
-    // Execute user-defined calculate() function
-    const FnCtor = Object.getPrototypeOf(function(){}).constructor as FunctionConstructor;
-    const fn = new FnCtor('__bytes__', code + '\nreturn calculate(__bytes__);');
-    const computed = (fn([...data]) as number) >>> 0;
+    const computed = await _runInWorker(csId, code, data);
+    if (computed === null) return false; // error or timeout
 
     // Compare as little-endian integer of checksum_size bytes
     let expectedVal = 0;
@@ -580,7 +717,7 @@ function asciiToHex(text: string): string {
   return bytes.join(' ');
 }
 
-export function matchesTrigger(p: Packet, pattern: string): boolean {
+function matchesTrigger(p: Packet, pattern: string): boolean {
   return matchToken(p, pattern);
 }
 
@@ -589,7 +726,7 @@ export function usePackets() {
   const { packets, filter, activeSessionId, sessions } = state;
   const { tokens, showTx, showRx, errorsOnly, minGapMs } = filter;
 
-  return packets.filter(p => {
+  return useMemo(() => packets.filter(p => {
     if (activeSessionId === null) return false;
     if (p.session_id !== activeSessionId) return false;
     if (!showTx && p.direction === 'TX') return false;
@@ -598,7 +735,8 @@ export function usePackets() {
     if (minGapMs !== null && (p.gap_ms ?? 0) < minGapMs) return false;
     if (tokens.length === 0) return true;
     return tokens.every(tok => matchToken(p, tok, sessions));
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [packets, activeSessionId, showTx, showRx, errorsOnly, minGapMs, tokens, sessions]);
 }
 
 export function useActiveSession() {
@@ -610,8 +748,11 @@ export function useActiveSession() {
 export function useSessionPackets() {
   const { state } = useApp();
   const { packets, activeSessionId } = state;
-  if (activeSessionId === null) return [];
-  return packets.filter(p => p.session_id === activeSessionId);
+  return useMemo(() => {
+    if (activeSessionId === null) return [];
+    return packets.filter(p => p.session_id === activeSessionId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [packets, activeSessionId]);
 }
 
 export function useSelectedPacket() {
