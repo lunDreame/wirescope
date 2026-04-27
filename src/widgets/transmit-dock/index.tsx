@@ -4,7 +4,7 @@ import s from './Dock.module.css';
 import { useApp } from '../../app/store';
 import { useT } from '../../shared/lib/i18n';
 import * as api from '../../shared/api/tauri';
-import type { TxPreset, DockTab } from '../../shared/types';
+import type { TxPreset, TimedMacro, DockTab } from '../../shared/types';
 
 const MACRO_KEYS = ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
 
@@ -176,6 +176,7 @@ export function TransmitDock() {
     { id: 'script',   label: t('dock.script') },
     { id: 'console',  label: t('dock.console') },
     { id: 'macro',    label: t('dock.macro') },
+    { id: 'timer',    label: t('dock.timer') },
   ];
 
   return (
@@ -326,6 +327,10 @@ export function TransmitDock() {
         {tab === 'script'  && <ScriptTab  activeId={activeId} connected={connected} dispatch={dispatch} />}
         {tab === 'console' && <ConsoleTab />}
         {tab === 'macro'   && <MacroTab   activeId={activeId} connected={connected} dispatch={dispatch} />}
+        {/* TimedMacroTab is always mounted so timers survive tab switches */}
+        <div style={{ display: tab === 'timer' ? 'flex' : 'none', height: '100%', flexDirection: 'column' }}>
+          <TimedMacroTab activeId={activeId} connected={connected} dispatch={dispatch} />
+        </div>
       </div>
     </div>
   );
@@ -623,6 +628,251 @@ function ConsoleTab() {
         ))}
         <div ref={bottomRef} />
       </div>
+    </div>
+  );
+}
+
+function TimedMacroTab({ activeId, connected, dispatch }: {
+  activeId: string | null; connected: boolean;
+  dispatch: React.Dispatch<any>;
+}) {
+  const t = useT();
+
+  const [macros, setMacros] = useState<TimedMacro[]>(() => {
+    try {
+      const v = localStorage.getItem('ws_timed_macros');
+      const list: TimedMacro[] = v ? JSON.parse(v) : [];
+      return list.map(m => ({ ...m, active: false }));
+    } catch { return []; }
+  });
+  const [editingId, setEditingId]   = useState<string | null>(null);
+  const [adding, setAdding]         = useState(false);
+  const [newName, setNewName]       = useState('');
+  const [newBytes, setNewBytes]     = useState('');
+  const [newFmt, setNewFmt]         = useState<'hex' | 'ascii'>('ascii');
+  const [newInterval, setNewInterval] = useState(1000);
+
+  const timerRefs   = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  const macrosRef   = useRef(macros);
+  const activeIdRef = useRef(activeId);
+  useEffect(() => { macrosRef.current = macros; }, [macros]);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
+
+  // Stop all timers when disconnected, session changes, or unmount
+  useEffect(() => { if (!connected) stopAllTimers(); }, [connected]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { stopAllTimers(); }, [activeId]);                   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => stopAllTimers(), []);                          // eslint-disable-line react-hooks/exhaustive-deps
+
+  function persist(list: TimedMacro[]) {
+    setMacros(list);
+    try { localStorage.setItem('ws_timed_macros', JSON.stringify(list)); } catch {}
+  }
+
+  function stopTimer(id: string) {
+    if (timerRefs.current[id]) {
+      clearInterval(timerRefs.current[id]);
+      delete timerRefs.current[id];
+    }
+  }
+
+  function stopAllTimers() {
+    Object.keys(timerRefs.current).forEach(id => stopTimer(id));
+    timerRefs.current = {};
+    setMacros(prev => {
+      const next = prev.map(m => ({ ...m, active: false }));
+      try { localStorage.setItem('ws_timed_macros', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
+  async function doSend(macroId: string) {
+    const macro = macrosRef.current.find(m => m.id === macroId);
+    const aid   = activeIdRef.current;
+    if (!macro || !aid) return;
+    const hex = macro.inputFmt === 'ascii' ? asciiToHex(macro.bytes) : macro.bytes;
+    try {
+      await api.sendBytes(hex, aid);
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `TX [${macro.name}]: ${macro.bytes}`, kind: 'tx', session_id: aid } });
+    } catch (e: any) {
+      stopTimer(macroId);
+      setMacros(prev => {
+        const next = prev.map(m => m.id === macroId ? { ...m, active: false } : m);
+        try { localStorage.setItem('ws_timed_macros', JSON.stringify(next)); } catch {}
+        return next;
+      });
+      dispatch({ type: 'LOG_CONSOLE', entry: { ts: Date.now(), text: `Timer stopped [${macro.name}]: ${e}`, kind: 'err', session_id: aid } });
+    }
+  }
+
+  function toggleTimer(id: string) {
+    if (!connected || !activeId) return;
+    const macro = macros.find(m => m.id === id);
+    if (!macro) return;
+    if (timerRefs.current[id]) {
+      stopTimer(id);
+      persist(macros.map(m => m.id === id ? { ...m, active: false } : m));
+    } else {
+      persist(macros.map(m => m.id === id ? { ...m, active: true } : m));
+      doSend(id);
+      timerRefs.current[id] = setInterval(() => doSend(id), Math.max(macro.interval_ms, 10));
+    }
+  }
+
+  function addMacro() {
+    if (!newName.trim() || !newBytes.trim()) return;
+    const macro: TimedMacro = {
+      id:          Date.now().toString(),
+      name:        newName.trim(),
+      bytes:       newBytes.trim(),
+      inputFmt:    newFmt,
+      interval_ms: Math.max(newInterval, 10),
+      active:      false,
+    };
+    persist([...macros, macro]);
+    setNewName(''); setNewBytes(''); setNewFmt('ascii'); setNewInterval(1000);
+    setAdding(false);
+  }
+
+  function removeMacro(id: string) {
+    stopTimer(id);
+    persist(macros.filter(m => m.id !== id));
+    if (editingId === id) setEditingId(null);
+  }
+
+  function updateMacro(updated: TimedMacro) {
+    // If interval changed while timer is running, stop it — user must restart
+    if (timerRefs.current[updated.id]) {
+      const cur = macros.find(m => m.id === updated.id);
+      if (cur && cur.interval_ms !== updated.interval_ms) {
+        stopTimer(updated.id);
+        updated = { ...updated, active: false };
+      }
+    }
+    persist(macros.map(m => m.id === updated.id ? updated : m));
+  }
+
+  const activeCount = macros.filter(m => m.active).length;
+
+  return (
+    <div className={s.timerTab}>
+      {activeCount > 0 && (
+        <div className={s.timerRunningBar}>
+          <span className={s.timerRunningDot} />
+          {activeCount}{t('dock.timerRunning')}
+          <button className={s.timerStopAll} onClick={stopAllTimers}>{t('dock.stop')} all</button>
+        </div>
+      )}
+
+      <div className={s.timerList}>
+        {macros.map(m => (
+          <div key={m.id} className={`${s.timerRow} ${m.active ? s.timerRowActive : ''}`}>
+            <div className={s.timerRowMain}>
+              <button
+                className={`${s.timerToggle} ${m.active ? s.timerToggleOn : ''}`}
+                onClick={() => toggleTimer(m.id)}
+                disabled={!connected && !m.active}
+                title={m.active ? t('dock.stop') : t('dock.timerStart')}
+              >
+                {m.active ? '■' : '●'}
+              </button>
+              <div className={s.timerInfo} onClick={() => setEditingId(editingId === m.id ? null : m.id)}>
+                <div className={s.timerName}>{m.name}</div>
+                <div className={s.timerSub}>
+                  <span className={s.timerFmtBadge}>{m.inputFmt.toUpperCase()}</span>
+                  {m.bytes}
+                </div>
+              </div>
+              <div className={s.timerIntervalWrap}>
+                <input
+                  className={s.timerIntervalInp}
+                  type="text"
+                  inputMode="numeric"
+                  value={m.interval_ms}
+                  onChange={e => {
+                    const v = e.target.value.replace(/\D/g, '');
+                    updateMacro({ ...m, interval_ms: v ? Math.max(parseInt(v), 10) : 10 });
+                  }}
+                  onFocus={e => e.target.select()}
+                  title={t('dock.timerIntervalTip')}
+                />
+                <span className={s.unit}>ms</span>
+              </div>
+              <div className={s.timerActions}>
+                <button className={s.timerSendBtn} onClick={() => doSend(m.id)} disabled={!connected} title={t('dock.send')}>▶</button>
+                <button className={s.timerDeleteBtn} onClick={() => removeMacro(m.id)} title={t('dock.delete')}>×</button>
+              </div>
+            </div>
+            {editingId === m.id && (
+              <div className={s.timerEditPanel}>
+                <div className={s.addRow}>
+                  <div className={s.fmtToggle}>
+                    <button className={`${s.fmtBtn} ${m.inputFmt === 'hex' ? s.fmtBtnOn : ''}`} onClick={() => updateMacro({ ...m, inputFmt: 'hex' })}>HEX</button>
+                    <button className={`${s.fmtBtn} ${m.inputFmt === 'ascii' ? s.fmtBtnOn : ''}`} onClick={() => updateMacro({ ...m, inputFmt: 'ascii' })}>ASCII</button>
+                  </div>
+                </div>
+                <input className={s.addInp} value={m.name}
+                  onChange={e => updateMacro({ ...m, name: e.target.value })}
+                  placeholder={t('dock.presetName')} />
+                <input className={s.addInp} value={m.bytes}
+                  onChange={e => updateMacro({ ...m, bytes: e.target.value })}
+                  placeholder={m.inputFmt === 'ascii' ? t('dock.asciiPlaceholder') : t('dock.hexBytes')}
+                  spellCheck={false} />
+              </div>
+            )}
+          </div>
+        ))}
+
+        {adding ? (
+          <div className={s.timerAddForm}>
+            <input className={s.addInp} value={newName}
+              onChange={e => setNewName(e.target.value)}
+              placeholder={t('dock.presetName')} autoFocus
+              onKeyDown={e => e.key === 'Enter' && addMacro()} />
+            <input className={s.addInp} value={newBytes}
+              onChange={e => setNewBytes(e.target.value)}
+              placeholder={newFmt === 'ascii' ? t('dock.asciiPlaceholder') : t('dock.hexBytes')}
+              spellCheck={false}
+              onKeyDown={e => e.key === 'Enter' && addMacro()} />
+            <div className={s.addRow}>
+              <div className={s.fmtToggle}>
+                <button className={`${s.fmtBtn} ${newFmt === 'hex' ? s.fmtBtnOn : ''}`} onClick={() => setNewFmt('hex')}>HEX</button>
+                <button className={`${s.fmtBtn} ${newFmt === 'ascii' ? s.fmtBtnOn : ''}`} onClick={() => setNewFmt('ascii')}>ASCII</button>
+              </div>
+              <input className={s.timerIntervalInp} type="text" inputMode="numeric" value={newInterval}
+                onChange={e => { const v = e.target.value.replace(/\D/g, ''); setNewInterval(v ? parseInt(v) : 10); }}
+                onFocus={e => e.target.select()} />
+              <span className={s.unit}>ms</span>
+            </div>
+            <div className={s.addBtns}>
+              <button className={s.addSaveBtn} onClick={addMacro}>{t('dock.save')}</button>
+              <button className={s.addCancelBtn} onClick={() => setAdding(false)}>{t('dock.cancel')}</button>
+            </div>
+          </div>
+        ) : (
+          <div className={s.timerAddRow} onClick={() => setAdding(true)}>
+            {t('dock.timerNew')}
+          </div>
+        )}
+      </div>
+
+      {macros.length > 0 && (
+        <div className={s.timerQuickBar}>
+          <div className={s.timerQuickLabel}>{t('dock.timerQuickSend')}</div>
+          <div className={s.timerQuickBtns}>
+            {macros.map(m => (
+              <button
+                key={m.id}
+                className={`${s.timerQuickBtn} ${m.active ? s.timerQuickBtnActive : ''}`}
+                onClick={() => doSend(m.id)}
+                disabled={!connected}
+                title={`${m.bytes} · ${m.interval_ms}ms`}
+              >
+                {m.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

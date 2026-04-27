@@ -756,3 +756,281 @@
 .macroClear:hover { color: var(--err); }
 .macroSave { background: var(--brand); color: white; border-color: transparent; }
 .macroCancel { background: none; }
+
+/* ── Timer Macro Tab ─────────────────────────────────────────── */
+.timerTab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.timerRunningBar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  font-size: 10.5px;
+  color: var(--tx);
+  background: var(--tx-bg);
+  border-bottom: 1px solid oklch(from var(--tx) l c h / 0.2);
+  flex-shrink: 0;
+}
+
+.timerRunningDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tx);
+  animation: pulse-run 0.8s ease infinite;
+  flex-shrink: 0;
+}
+
+.timerStopAll {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 1px 8px;
+  background: none;
+  border: 1px solid oklch(from var(--tx) l c h / 0.4);
+  border-radius: var(--r-1);
+  color: var(--tx);
+  cursor: pointer;
+}
+
+.timerStopAll:hover { background: oklch(from var(--tx) l c h / 0.12); }
+
+.timerList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 0;
+}
+
+.timerRow {
+  border-bottom: 1px solid var(--rule);
+  padding: 5px 10px;
+  transition: background 0.08s;
+}
+
+.timerRow:hover { background: var(--hover); }
+.timerRowActive { background: oklch(from var(--tx) 0.97 0.02 150 / 0.08); }
+.timerRowActive:hover { background: oklch(from var(--tx) 0.95 0.03 150 / 0.12); }
+
+.timerRowMain {
+  display: grid;
+  grid-template-columns: 22px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.timerToggle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-dim);
+  font-size: 7px;
+  padding: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.timerToggle:hover:not(:disabled) {
+  border-color: var(--tx);
+  color: var(--tx);
+  background: var(--tx-bg);
+}
+
+.timerToggle:disabled { opacity: 0.38; cursor: not-allowed; }
+
+.timerToggleOn {
+  background: var(--tx-bg);
+  border-color: var(--tx);
+  color: var(--tx);
+  animation: pulse-run 0.8s ease infinite;
+}
+
+.timerInfo {
+  overflow: hidden;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.timerName {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timerSub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.timerFmtBadge {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  margin-right: 4px;
+  opacity: 0.65;
+}
+
+.timerIntervalWrap {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.timerIntervalInp {
+  width: 52px;
+  height: 22px;
+  padding: 0 5px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-1);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  outline: none;
+  text-align: right;
+}
+
+.timerIntervalInp:focus { border-color: var(--brand); }
+
+.timerActions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.timerSendBtn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid oklch(from var(--tx) l c h / 0.3);
+  border-radius: 3px;
+  font-size: 9px;
+  color: var(--tx);
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.timerSendBtn:hover:not(:disabled) { background: var(--tx-bg); }
+.timerSendBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.timerDeleteBtn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.1s;
+}
+
+.timerRow:hover .timerDeleteBtn { opacity: 1; }
+.timerDeleteBtn:hover { color: var(--err); border-color: oklch(from var(--err) l c h / 0.35); }
+
+.timerEditPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule);
+}
+
+.timerAddForm {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.timerAddRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--brand);
+  cursor: pointer;
+  transition: background 0.08s;
+}
+
+.timerAddRow:hover { background: var(--hover); }
+
+/* Quick Send bar */
+.timerQuickBar {
+  border-top: 1px solid var(--line);
+  padding: 6px 10px 7px;
+  flex-shrink: 0;
+  background: var(--panel-2);
+}
+
+.timerQuickLabel {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  margin-bottom: 5px;
+}
+
+.timerQuickBtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.timerQuickBtn {
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-1);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: all 0.1s;
+  white-space: nowrap;
+}
+
+.timerQuickBtn:hover:not(:disabled) {
+  background: var(--tx-bg);
+  color: var(--tx);
+  border-color: oklch(from var(--tx) l c h / 0.4);
+}
+
+.timerQuickBtnActive {
+  background: var(--tx-bg);
+  color: var(--tx);
+  border-color: var(--tx);
+}
+
+.timerQuickBtn:disabled { opacity: 0.38; cursor: not-allowed; }

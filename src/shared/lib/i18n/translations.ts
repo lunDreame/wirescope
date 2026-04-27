@@ -234,6 +234,14 @@ const T: Record<string, LangMap> = {
   'dock.scriptExecError': { ko: '오류: ', en: 'Error: ' },
   'dock.macroLog':        { ko: '매크로 ', en: 'Macro ' },
 
+  // ── Timer Macro tab ──────────────────────────────────────────
+  'dock.timer':              { ko: '타이머',            en: 'Timer' },
+  'dock.timerNew':           { ko: '+ 새 매크로',       en: '+ New Macro' },
+  'dock.timerStart':         { ko: '타이머 시작',       en: 'Start timer' },
+  'dock.timerIntervalTip':   { ko: '전송 주기 (ms) — 변경 후 재시작 필요', en: 'Interval (ms) — restart timer after changing' },
+  'dock.timerQuickSend':     { ko: '빠른 전송',         en: 'Quick Send' },
+  'dock.timerRunning':       { ko: '개 타이머 실행 중', en: ' timer(s) running' },
+
   // ── Connect Page ─────────────────────────────────────────────
   'connect.serialTitle':    { ko: '시리얼 통신',               en: 'Serial' },
   'connect.serialSub':      { ko: 'COM 포트 / TTY 장치 연결', en: 'COM port / TTY device' },

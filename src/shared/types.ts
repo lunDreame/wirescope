@@ -71,6 +71,15 @@ export interface SavedFilter {
   count?: number;
 }
 
+export interface TimedMacro {
+  id:          string;
+  name:        string;
+  bytes:       string;
+  inputFmt:    'hex' | 'ascii';
+  interval_ms: number;
+  active:      boolean;
+}
+
 export interface TxPreset {
   id:       string;
   name:     string;
@@ -112,7 +121,7 @@ export interface CustomChecksum {
 export type Screen = 'workspace' | 'connect' | 'splitter' | 'checksum' | 'analyzer';
 export type ByteFormat = 'hex' | 'ascii' | 'dec' | 'bin';
 export type DensityLevel = 'cozy' | 'mid' | 'tight';
-export type DockTab = 'transmit' | 'script' | 'console' | 'macro';
+export type DockTab = 'transmit' | 'script' | 'console' | 'macro' | 'timer';
 export type InspectorTab = 'detail' | 'analysis' | 'graph' | 'notes';
 
 export interface FilterState {
