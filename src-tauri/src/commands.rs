@@ -311,6 +311,17 @@ pub async fn install_update(
     app: AppHandle,
     pending: State<'_, PendingUpdate>,
 ) -> Result<(), String> {
+    // On macOS, running directly from a mounted DMG (/Volumes/...) means the
+    // filesystem is read-only — the updater cannot overwrite the app bundle there.
+    #[cfg(target_os = "macos")]
+    if let Ok(exe) = std::env::current_exe() {
+        if exe.starts_with("/Volumes/") {
+            return Err(
+                "DMG에서 직접 실행 중입니다. WireScope를 응용 프로그램 폴더로 복사한 후 다시 실행해 주세요.".into(),
+            );
+        }
+    }
+
     let update = {
         let mut lock = pending.0.lock();
         lock.take().ok_or("업데이트 정보가 없습니다")?
@@ -319,7 +330,15 @@ pub async fn install_update(
     update
         .download_and_install(|_chunk, _total| {}, || {})
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            if e.to_string().contains("Read-only file system")
+                || e.to_string().contains("os error 30")
+            {
+                "파일 시스템이 읽기 전용입니다. 앱을 응용 프로그램 폴더에 설치한 후 다시 시도해 주세요.".into()
+            } else {
+                e.to_string()
+            }
+        })?;
 
     app.restart();
 }
