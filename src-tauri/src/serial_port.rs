@@ -37,17 +37,11 @@ pub fn open(
 
 fn read_loop(mut port: Box<dyn SerialPort>, on_data: impl Fn(Vec<u8>)) {
     let mut buf = [0u8; 4096];
-    let mut coalesce: Vec<u8> = Vec::new();
     loop {
         match port.read(&mut buf) {
-            Ok(n) if n > 0 => coalesce.extend_from_slice(&buf[..n]),
+            Ok(n) if n > 0 => on_data(buf[..n].to_vec()),
             Ok(_) => {}
-            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                // Silence window detected — flush accumulated bytes as one chunk
-                if !coalesce.is_empty() {
-                    on_data(std::mem::take(&mut coalesce));
-                }
-            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {}
             Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => {}
             Err(_) => break,
         }
